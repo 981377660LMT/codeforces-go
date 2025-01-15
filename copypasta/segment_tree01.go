@@ -1,10 +1,16 @@
 package copypasta
 
+import "math/bits"
+
 // 0-1 线段树
 // 支持区间翻转比特、单比特加减等
-// 某些情况下可作为 Bitset 的代替品
+// 要点：维护对偶问题的答案
+// 某些情况下可作为 Bitset 的替代品
+// LC2569 https://leetcode.cn/problems/handling-sum-queries-after-update/
+// https://www.luogu.com.cn/problem/P2572
 // https://codeforces.com/contest/1705/problem/E
 // https://codeforces.com/problemset/problem/877/E
+// https://codeforces.com/problemset/problem/145/E 2400
 type seg01 []struct {
 	l, r int
 	ones int // EXTRA: 1 的个数
@@ -13,13 +19,12 @@ type seg01 []struct {
 	//  0: [l,r] 内有 0 有 1
 	state int8
 	flip  bool // lazy tag
-}
 
-// 见 buildWithBinary
-func newSeg01(a string) seg01 {
-	t := make(seg01, 4*len(a))
-	t.buildWithBinary(a, 1, 1, len(a))
-	return t
+	// 还可以维护：
+	// 连续 0 的最长长度（前缀、后缀、区间）
+	// 连续 1 的最长长度（前缀、后缀、区间）
+	// 见 https://www.luogu.com.cn/problem/P2572
+	// 代码 https://www.luogu.com.cn/record/138274036
 }
 
 func (t seg01) maintain(o int) {
@@ -34,14 +39,27 @@ func (t seg01) maintain(o int) {
 	t[o].ones = lo.ones + ro.ones
 }
 
-func (t seg01) build(o, l, r int) {
-	t[o].l, t[o].r, t[o].state = l, r, -1 // 初始全为 0，故设置为 -1
-	if l == r {
-		return
+func (t seg01) doFlip(O int) {
+	o := &t[O]
+	o.state = -o.state
+	o.ones = o.r - o.l + 1 - o.ones
+	o.flip = !o.flip
+}
+
+func (t seg01) spread(o int) {
+	if t[o].flip {
+		t.doFlip(o << 1)
+		t.doFlip(o<<1 | 1)
+		t[o].flip = false
 	}
-	m := (l + r) >> 1
-	t.build(o<<1, l, m)
-	t.build(o<<1|1, m+1, r)
+}
+
+// 见 buildWithBinary
+func newSeg01(a string) seg01 {
+	n := len(a)
+	t := make(seg01, 2<<bits.Len(uint(n-1)))
+	t.buildWithBinary(a, 1, 1, n)
+	return t
 }
 
 // a 从左到右是二进制从低到高
@@ -63,19 +81,14 @@ func (t seg01) buildWithBinary(a string, o, l, r int) {
 	t.maintain(o)
 }
 
-func (t seg01) doFlip(O int) {
-	o := &t[O]
-	o.state = -o.state
-	o.ones = o.r - o.l + 1 - o.ones
-	o.flip = !o.flip
-}
-
-func (t seg01) spread(o int) {
-	if t[o].flip {
-		t.doFlip(o << 1)
-		t.doFlip(o<<1 | 1)
-		t[o].flip = false
+func (t seg01) build(o, l, r int) {
+	t[o].l, t[o].r, t[o].state = l, r, -1 // 初始全为 0，故设置为 -1
+	if l == r {
+		return
 	}
+	m := (l + r) >> 1
+	t.build(o<<1, l, m)
+	t.build(o<<1|1, m+1, r)
 }
 
 // 将 [l,r] 内的 0 置为 1，1 置为 0
@@ -134,6 +147,20 @@ func (t seg01) next1(o, l int) int {
 	return t.next1(o<<1|1, l)
 }
 
+// 返回第 k 个 1 的位置
+// 必须满足 k <= t[1].ones
+// o=1, k>=1
+func (t seg01) kth1(o, k int) int {
+	if t[o].l == t[o].r {
+		return t[o].l
+	}
+	t.spread(o)
+	if k <= t[o<<1].ones {
+		return t.kth1(o<<1, k)
+	}
+	return t.kth1(o<<1|1, k-t[o<<1].ones)
+}
+
 // 返回最后一个 1 的位置（类似 bits.Len）
 // 如果题目不保证此时一定有 1，则要特判下：如果 t[1].state < 0 则没有 1
 // o=1
@@ -179,7 +206,7 @@ func (t seg01) all0(l, r int) bool { return t.onesCount(1, l, r) == 0 }
 func (t seg01) all1(l, r int) bool { return t.onesCount(1, l, r) == r-l+1 }
 func (t seg01) index0() int        { return t.next0(1, 1) }
 func (t seg01) index1() int        { return t.next1(1, 1) }
-func (t seg01) trailingZeros() int { return t.index1() }
+func (t seg01) trailingZeros() int { return t.index1() } // -1
 func (t seg01) len() int {
 	if t[1].state < 0 {
 		return 0

@@ -34,9 +34,9 @@ func CF8C(in io.Reader, out io.Writer) {
 			continue
 		}
 		i := 1<<n - 1 ^ s
-		lb := i & -i
+		lb := i & -i // lowbit 早晚都要选，或者说每次搬运是互相独立的
 		p := bits.TrailingZeros(uint(lb)) + 1
-		for j, lb2 := i, 0; j > 0; j ^= lb2 {
+		for j, lb2 := i, 0; j > 0; j ^= lb2 { // 可以只选 lowbit
 			lb2 = j & -j
 			q := bits.TrailingZeros(uint(lb2)) + 1
 			if t, v := s|lb|lb2, dv+dis[0][p]+dis[0][q]+dis[p][q]; v < dp[t] {
