@@ -5,7 +5,6 @@ import (
 	"github.com/EndlessCheng/codeforces-go/main/testutil"
 	"github.com/stretchr/testify/assert"
 	"io"
-	"io/ioutil"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -19,17 +18,13 @@ var customTestCases = [][2]string{
 }
 
 func Test(t *testing.T) {
-	dir, _ := filepath.Abs(".")
-	t.Logf("Current problem is [%s]", filepath.Base(dir))
-
 	if len(customTestCases) > 0 && strings.TrimSpace(customTestCases[0][0]) != "" {
-		tarCase := 0 // -1
-		testutil.AssertEqualStringCase(t, customTestCases, tarCase, run)
+		testutil.AssertEqualStringCaseWithPrefix(t, customTestCases, 0, run, "Custom ")
 		t.Log("======= custom =======")
 	}
 
-	tarCase := 0 // -1
-	testutil.AssertEqualFileCaseWithName(t, dir, "in*.txt", "ans*.txt", tarCase, run)
+	dir, _ := filepath.Abs(".")
+	testutil.AssertEqualFileCaseWithName(t, dir, "in*.txt", "ans*.txt", 0, run)
 }
 
 // 无尽对拍 / 构造 hack 数据
@@ -41,10 +36,10 @@ func Test(t *testing.T) {
 func TestCompare(_t *testing.T) {
 	return
 	testutil.DebugTLE = 0
-
+	rg := testutil.NewRandGenerator()
 	inputGenerator := func() string {
 		//return ``
-		rg := testutil.NewRandGenerator()
+		rg.Clear()
 		rg.One() // 若不是多测则 remove
 		n := rg.Int(1, 3)
 		rg.NewLine()
@@ -64,7 +59,7 @@ func TestCompare(_t *testing.T) {
 			solve(Case)
 		}
 
-		_leftData, _ := ioutil.ReadAll(in)
+		_leftData, _ := io.ReadAll(in)
 		if _s := strings.TrimSpace(string(_leftData)); _s != "" {
 			panic("有未读入的数据：\n" + _s)
 		}
@@ -73,14 +68,13 @@ func TestCompare(_t *testing.T) {
 	// 先用 runBF 跑下样例，检查 runBF 是否正确
 	dir, _ := filepath.Abs(".")
 	testutil.AssertEqualFileCaseWithName(_t, dir, "in*.txt", "ans*.txt", 0, runBF)
-	//testutil.AssertEqualStringCase(t, customTestCases, 0, runBF)
+	//testutil.AssertEqualStringCase(_t, customTestCases, 0, runBF)
 	return
 
 	testutil.AssertEqualRunResultsInf(_t, inputGenerator, runBF, run)
-	return
 
-	// for hacking, write wrong codes in runBF
-	testutil.AssertEqualRunResultsInf(_t, inputGenerator, run, runBF)
+	// for hacking, write the hacked codes in runBF
+	//testutil.AssertEqualRunResultsInf(_t, inputGenerator, run, runBF)
 }
 
 // 无尽检查输出是否正确 / 构造 hack 数据
@@ -89,11 +83,10 @@ func TestCheck(_t *testing.T) {
 	return
 	assert := assert.New(_t)
 	_ = assert
-
 	testutil.DebugTLE = 0
-
+	rg := testutil.NewRandGenerator()
 	inputGenerator := func() (string, testutil.OutputChecker) {
-		rg := testutil.NewRandGenerator()
+		rg.Clear()
 		rg.One() // 若不是多测则 remove
 		n := rg.Int(1, 5)
 		rg.NewLine()
@@ -116,13 +109,23 @@ func TestCheck(_t *testing.T) {
 		}
 	}
 
-	target := 0
-	testutil.CheckRunResultsInfWithTarget(_t, inputGenerator, target, run)
+	testutil.CheckRunResultsInfWithTarget(_t, inputGenerator, 0, run)
+
+	//runHack := func(in io.Reader, out io.Writer) { }
+	//testutil.CheckRunResultsInf(_t, inputGenerator, runHack)
+}
+
+func TestRE(_t *testing.T) {
 	return
-
-	// for hacking, write wrong codes here
-	runHack := func(in io.Reader, out io.Writer) {
-
+	testutil.DebugTLE = 0
+	rg := testutil.NewRandGenerator()
+	inputGenerator := func() (string, testutil.OutputChecker) {
+		rg.Clear()
+		rg.One() // 若不是多测则 remove
+		n := rg.Int(1, 5)
+		rg.NewLine()
+		rg.IntSlice(n, 0, 5)
+		return rg.String(), func(myOutput string) bool { return true }
 	}
-	testutil.CheckRunResultsInf(_t, inputGenerator, runHack)
+	testutil.CheckRunResultsInfWithTarget(_t, inputGenerator, 0, run)
 }

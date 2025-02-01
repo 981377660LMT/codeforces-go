@@ -7,67 +7,58 @@ import (
 )
 
 // github.com/EndlessCheng/codeforces-go
-func CF1324F(_r io.Reader, _w io.Writer) {
-	in := bufio.NewReader(_r)
+func CF1324F(in io.Reader, _w io.Writer) {
 	out := bufio.NewWriter(_w)
 	defer out.Flush()
-	max := func(a, b int) int {
-		if a >= b {
-			return a
-		}
-		return b
-	}
-
-	var n, v, w int
+	var n int
 	Fscan(in, &n)
 	color := make([]int, n)
 	for i := range color {
 		Fscan(in, &color[i])
-		if color[i] == 0 {
-			color[i] = -1
-		}
 	}
-	g := make([][]int, n+1)
-	for i := 0; i < n-1; i++ {
+	g := make([][]int, n)
+	for range n - 1 {
+		var v, w int
 		Fscan(in, &v, &w)
+		v--
+		w--
 		g[v] = append(g[v], w)
 		g[w] = append(g[w], v)
 	}
-	g[1] = append(g[1], 0)
 
-	ans := make([]int, n+1)
-	var f func(v, fa int) int
-	f = func(v, fa int) int {
-		sum := color[v-1]
+	ans := make([]int, n)
+	var dfs func(int, int) int
+	dfs = func(v, fa int) int {
+		res := color[v]*2 - 1
 		for _, w := range g[v] {
 			if w != fa {
-				sum += f(w, v)
+				res += dfs(w, v)
 			}
 		}
-		ans[v] = sum
-		if sum < 0 {
-			return 0
-		}
-		return sum
+		ans[v] = res
+		return max(res, 0)
 	}
-	f(1, 0)
-	var f2 func(v, fa int)
-	f2 = func(v, fa int) {
-		if ans[v] >= 0 {
-			ans[v] = max(ans[v], ans[fa])
-		} else {
-			ans[v] = max(ans[v], ans[v]+ans[fa])
-		}
+	dfs(0, -1)
+
+	var reroot func(int, int)
+	reroot = func(v, fa int) {
 		for _, w := range g[v] {
-			if w != fa {
-				f2(w, v)
+			if w == fa {
+				continue
 			}
+			if ans[w] < 0 {
+				ans[w] += max(ans[v], 0)
+			} else {
+				ans[w] = max(ans[w], ans[v])
+			}
+			reroot(w, v)
 		}
 	}
-	f2(1, 0)
-	for _, v := range ans[1:] {
+	reroot(0, -1)
+
+	for _, v := range ans {
 		Fprint(out, v, " ")
 	}
 }
 
-//func main() { CF1324F(os.Stdin, os.Stdout) }
+//func main() { CF1324F(bufio.NewReader(os.Stdin), os.Stdout) }

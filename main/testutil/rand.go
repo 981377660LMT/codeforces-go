@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"bytes"
 	"fmt"
 	"math/rand"
 	"sort"
@@ -15,16 +16,20 @@ const (
 )
 
 func NewRandGenerator() *RG {
-	return &RG{&strings.Builder{}}
+	return NewRandGeneratorWithSeed(1)
 }
 
 func NewRandGeneratorWithSeed(seed int64) *RG {
 	rand.Seed(seed)
-	return NewRandGenerator()
+	return &RG{&strings.Builder{}}
 }
 
 type RG struct {
 	sb *strings.Builder
+}
+
+func (r *RG) Clear() {
+	r.sb.Reset()
 }
 
 // for random string, see Str
@@ -162,6 +167,30 @@ func (r *RG) IntSliceOrdered(size int, min, max int, inc, unique bool) []int {
 	return a
 }
 
+// IntSliceDiffNeighbor generates a random int slice with a fixed size and its values in range [min, max]
+// It's guaranteed that a[i] != a[i+1] for all i in [0, size-2]
+func (r *RG) IntSliceDiffNeighbor(size int, min, max int) []int {
+	if min >= max {
+		panic("min must less than max")
+	}
+	a := make([]int, size)
+	a[0] = r._int(min, max)
+	for i := 1; i < size; i++ {
+		for {
+			a[i] = r._int(min, max)
+			if a[i] != a[i-1] {
+				break
+			}
+		}
+	}
+	for _, v := range a {
+		r.sb.WriteString(strconv.Itoa(v))
+		r.Space()
+	}
+	r.NewLine()
+	return a
+}
+
 // IntMatrix generates a random int matrix with fixed row and col and its values in range [min, max]
 func (r *RG) IntMatrix(row, col int, min, max int) [][]int {
 	a := make([][]int, row)
@@ -224,6 +253,10 @@ func (r *RG) UniqueSlice(size int, min, max int) []int {
 	}
 	r.NewLine()
 	return p
+}
+
+func (r *RG) IntSliceUnique(size int, min, max int) []int {
+	return r.UniqueSlice(size, min, max)
 }
 
 // Permutation generates a random permutation with a fixed size and its values in range [min, max]
@@ -295,6 +328,8 @@ func (r *RG) BinaryTree(n, st int) (children [][2]int) {
 // 随机父节点
 // 期望树高 https://blog.csdn.net/EI_Captain/article/details/109910307
 // 更严格的随机树见 https://mivik.blog.luogu.org/the-art-of-randomness
+// 叶子节点个数：期望 n/2 个
+// On the number of leaves in a random recursive tree https://projecteuclid.org/journals/brazilian-journal-of-probability-and-statistics/volume-29/issue-4/On-the-number-of-leaves-in-a-random-recursive-tree/10.1214/14-BJPS252.pdf
 func (r *RG) treeEdges(n, st int) (edges [][2]int) {
 	edges = make([][2]int, 0, n-1)
 	for i := 1; i < n; i++ {
@@ -329,36 +364,40 @@ func (r *RG) TreeWeightedEdges(n, st, minWeight, maxWeight int) (edges [][3]int)
 
 // todo https://codeforces.com/blog/entry/77970
 func (r *RG) graphEdges(n, m, st int, directed bool) (edges [][2]int) {
-	if m < n-1 {
-		panic("m is too small")
-	}
+	//if m < n-1 {
+	//	panic("m is too small")
+	//}
 	if m > n*(n-1)/2 { // 64-bit, no worry about overflow
 		panic("m is too large")
 	}
 
 	edges = r.treeEdges(n, st)
-
-	has := make([]map[int]bool, n)
-	for i := range has {
-		has[i] = map[int]bool{}
-	}
-	for _, e := range edges {
-		// v < w
-		v, w := e[0]-st, e[1]-st
-		has[v][w] = true
+	if m < n-1 {
+		edges = edges[:m]
 	}
 
-	for i := n - 1; i < m; i++ {
-		for {
+	if m >= n {
+		has := make([]map[int]bool, n)
+		for i := range has {
+			has[i] = map[int]bool{}
+		}
+		for _, e := range edges {
 			// v < w
-			v := r._int(0, n-2)
-			w := r._int(v+1, n-1)
-			if !has[v][w] { // todo 对于稠密图，这样做可能会导致运行时间较长，此时可以考虑生成补图，然后转化到原图
-				has[v][w] = true
-				v += st
-				w += st
-				edges = append(edges, [2]int{v, w})
-				break
+			v, w := e[0]-st, e[1]-st
+			has[v][w] = true
+		}
+		for i := n - 1; i < m; i++ {
+			for {
+				// v < w
+				v := r._int(0, n-2)
+				w := r._int(v+1, n-1)
+				if !has[v][w] { // todo 对于稠密图，这样做可能会导致运行时间较长，此时可以考虑生成补图，然后转化到原图
+					has[v][w] = true
+					v += st
+					w += st
+					edges = append(edges, [2]int{v, w})
+					break
+				}
 			}
 		}
 	}
@@ -370,6 +409,7 @@ func (r *RG) graphEdges(n, m, st int, directed bool) (edges [][2]int) {
 			}
 		}
 	}
+
 	return
 }
 
@@ -386,7 +426,7 @@ func (r *RG) GraphEdges(n, m, st int, directed bool) (edges [][2]int) {
 // TreeEdges generates a graph with n nodes, m edges, st-index, without self-loops and multiple edges, edge weights in range [minWeight, maxWeight]
 // TIPS: pass directed=false to generate a DAG.
 func (r *RG) GraphWeightedEdges(n, m, st, minWeight, maxWeight int, directed bool) (edges [][3]int) {
-	edges = make([][3]int, n-1)
+	edges = make([][3]int, m)
 	for i, e := range r.graphEdges(n, m, st, directed) {
 		weight := r._int(minWeight, maxWeight)
 		r.sb.WriteString(fmt.Sprintln(e[0], e[1], weight))
@@ -395,7 +435,30 @@ func (r *RG) GraphWeightedEdges(n, m, st, minWeight, maxWeight int, directed boo
 	return
 }
 
+func (r *RG) GraphMatrix(n int, directed bool) (g [][]byte) {
+	upper := n * (n - 1) / 2
+	m := r._int(0, upper)
+	edges := r.graphEdges(n, m, 0, directed)
+	g = make([][]byte, n)
+	for i := range g {
+		g[i] = bytes.Repeat([]byte{'0'}, n)
+	}
+	for _, e := range edges {
+		g[e[0]][e[1]] = '1'
+		if !directed {
+			g[e[1]][e[0]] = '1'
+		}
+	}
+	for _, row := range g {
+		r.sb.WriteString(string(row))
+		r.NewLine()
+	}
+	return
+}
+
+// Graph Hack SPFA
 // GraphHackSPFA generates a undirected grid graph with n nodes, st-index, without self-loops and multiple edges, edge weights in range [minWeight, maxWeight]
+// The return `edges` contains about 2n edges.
 //
 // For example, a 10 nodes 2 row grid graph looks like this:
 // 1-2-3-4-5
@@ -420,14 +483,15 @@ func (r *RG) GraphWeightedEdges(n, m, st, minWeight, maxWeight int, directed boo
 //
 // Reference:
 // https://blog.csdn.net/qq_45721135/article/details/102472101
+// https://blog.csdn.net/jinzhao1994/article/details/38311561
 // https://www.zhihu.com/question/292283275
 // https://www.zhihu.com/question/268382638
-func (r *RG) GraphHackSPFA(n, row, st, minWeight, maxWeight int) (edges [][3]int) {
+func (r *RG) GraphHackSPFA(n, row, st, minWeight, maxWeight int, dir bool) (edges [][3]int) {
 	rowLen := n / row
 	m := row*(rowLen-1) + (row-1)*rowLen + n%row
 
 	edges = make([][3]int, 0, m)
-	for i := 0; i < row-1; i++ {
+	for i := range row - 1 {
 		for j := 1 + i*rowLen; j < (i+1)*rowLen; j++ {
 			weight := r._int(minWeight, maxWeight)
 			edges = append(edges, [3]int{j - 1, j, weight})
@@ -441,16 +505,124 @@ func (r *RG) GraphHackSPFA(n, row, st, minWeight, maxWeight int) (edges [][3]int
 		edges = append(edges, [3]int{j - 1, j, weight})
 	}
 
+	// 有向图添加双向边
+	if dir {
+		for _, e := range edges {
+			edges = append(edges, [3]int{e[1], e[0], e[2]})
+		}
+	}
+
 	rand.Shuffle(len(edges), func(i, j int) { edges[i], edges[j] = edges[j], edges[i] })
 
 	// add st
-	for i := range edges {
-		edges[i][0] += st
-		edges[i][1] += st
+	if st != 0 {
+		for i := range edges {
+			edges[i][0] += st
+			edges[i][1] += st
+		}
 	}
 
 	for _, e := range edges {
 		r.sb.WriteString(fmt.Sprintln(e[0], e[1], e[1]))
+	}
+	return
+}
+
+// 菊花图
+// 要求：m 和 n 数量级一样
+// 要求：0 是起点
+// 0 --- 1 --- end (菊花)
+//   \-- 2 --/
+//   \-- 3 --/
+// 注：如果没有卡掉，可以试试重边（但感觉没多大意思，毕竟去个重就绕过去了）
+func (r *RG) GraphHackBellmanFord(n, m, st, minWeight, maxWeight int) (edges [][3]int) {
+	edges = make([][3]int, 0, m)
+
+	end := n/3 + 1 // 假定 n=m 的写法，如果 m >= 3n/2 可以改成 n/2+1
+	for i := 1; i < end; i++ {
+		// 注意不能设为 1，因为 Go 和 Java 的堆只比较边权，不比较节点，这可能会导致小的 maxWeight - i*2 跑到前面去
+		edges = append(edges, [3]int{0, i, i + minWeight})
+		//edges = append(edges, [3]int{i, end, maxWeight - min(i, end-i)*2}) // 可以卡掉倒着遍历邻居的写法
+		edges = append(edges, [3]int{i, end, maxWeight - i*2})
+	}
+
+	for i := end + 1; len(edges) < m; i++ {
+		edges = append(edges, [3]int{end, i, minWeight})
+	}
+
+	// add st
+	if st != 0 {
+		for i := range edges {
+			edges[i][0] += st
+			edges[i][1] += st
+		}
+	}
+
+	for _, e := range edges {
+		r.sb.WriteString(fmt.Sprintln(e[0], e[1], e[1]))
+	}
+	return
+}
+
+//func genHackExample() {
+//	sb := &strings.Builder{}
+//	defer func() { writeString(sb.String()) }()
+//	Print := func(a ...interface{}) { sb.WriteString(Sprint(a...)) }
+//	Printf := func(format string, a ...interface{}) { sb.WriteString(Sprintf(format, a...)) }
+//	Println := func(a ...interface{}) { sb.WriteString(Sprintln(a...)) }
+//	_, _, _ = Print, Printf, Println
+//
+//	n := 25000
+//	edges := rg.GraphHackSPFA(n, 6, 0, 1, 1e5)
+//	Println(n)
+//	Print("[")
+//	for i, e := range edges {
+//		if i > 0 {
+//			Print(",")
+//		}
+//		Print("[",e[0],",",e[1],",",e[2],"]")
+//	}
+//	Print("]")
+//}
+
+// https://leetcode.cn/problems/find-edges-in-shortest-paths/
+func simpleQueueExample(n int, edges [][]int) (ans []bool) {
+	f := func(st int) []int {
+		type nb struct{ v, w int }
+		g := make([][]nb, n)
+		for _, e := range edges {
+			v, w, wt := e[0], e[1], e[2]
+			g[v] = append(g[v], nb{w, wt})
+			g[w] = append(g[w], nb{v, wt})
+		}
+		d := make([]int, n)
+		for i := range d {
+			d[i] = 1e18
+		}
+		d[st] = 0
+		q := []nb{{st, 0}}
+		for len(q) > 0 {
+			p := q[0]
+			q = q[1:]
+			if p.w > d[p.v] {
+				continue
+			}
+			for _, e := range g[p.v] {
+				y, w := e.v, e.w
+				nw := p.w + w
+				if d[y] > nw {
+					d[y] = nw
+					q = append(q, nb{y, nw})
+				}
+			}
+		}
+		return d
+	}
+	d1 := f(0)
+	d2 := f(n - 1)
+	for _, e := range edges {
+		v, w, wt := e[0], e[1], e[2]
+		ans = append(ans, d1[v]+wt+d2[w] == d1[n-1] || d1[w]+wt+d2[v] == d1[n-1])
 	}
 	return
 }

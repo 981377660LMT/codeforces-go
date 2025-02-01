@@ -1,10 +1,14 @@
-根据题意，回文数的左半部分为
+只看回文数的左半部分，可以发现左半部分是从 $1000\cdots0$ 开始，逐渐增加的。
+
+具体地，第 $q$ 个回文数的左半部分为
 
 $$
-10^{\Big\lfloor\dfrac{\textit{intLength}-1}{2}\Big\rfloor} + q - 1
+10^a + q - 1
 $$
 
-反转这个数，拼到左半部分之后即为第 $q$ 个回文数。
+其中 $a = \left\lfloor\dfrac{\textit{intLength}-1}{2}\right\rfloor$。
+
+反转这个数，拼到左半部分之后，即为第 $q$ 个长为 $\textit{intLength}$ 的回文数。
 
 如果 $\textit{intLength}$ 为奇数则先去掉最低位再反转。
 
@@ -16,7 +20,7 @@ class Solution:
         for i, q in enumerate(queries):
             if q <= 9 * base:
                 s = str(base + q - 1)  # 回文数左半部分
-                s += s[-2::-1] if intLength % 2 else s[::-1]
+                s += s[::-1][intLength % 2:]
                 ans[i] = int(s)
         return ans
 ```

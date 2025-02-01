@@ -6,13 +6,47 @@ import (
 	"time"
 )
 
+/* 力扣
+
+- [470. 用 Rand7() 实现 Rand10()](https://leetcode.cn/problems/implement-rand10-using-rand7/)
+   我的总结 https://leetcode.cn/problems/implement-rand10-using-rand7/solutions/979495/mo-neng-gou-zao-fa-du-li-sui-ji-shi-jian-9xpz/comments/1343003
+   randA() 构造 randB() 时，需要找一个最大质因子不超过 A 的数 n (n>=B），然后对 n 分解质因子就能找到每个采样需要取多少种结果。实际到具体数字时，可以把部分质因子合并成不超过 A 的数，从而减少采样次数。
+
+- [528. 按权重随机选择](https://leetcode.cn/problems/random-pick-with-weight/)
+- [710. 黑名单中的随机数](https://leetcode.cn/problems/random-pick-with-blacklist/)
+
+*/
+
+/* 交互 + 随机
+
+https://codeforces.com/problemset/problem/843/B 2000
+https://codeforces.com/problemset/problem/1114/E 2200
+
+*/
+
 /* 随机化技巧
 https://oi-wiki.org/misc/rand-technique/
+https://www.luogu.com.cn/blog/DengDuck/qian-tan-ha-xi-yu-chu-li-ha-xi-chong-tu-di-yi-suo-fang-fa
 随机梯度下降 SGD, Stochastic Gradient Descent https://en.wikipedia.org/wiki/Stochastic_gradient_descent
 https://codeforces.com/problemset/problem/995/C
 https://codeforces.com/problemset/problem/1314/D 推荐
 https://codeforces.com/problemset/problem/1523/D
-https://codingcompetitions.withgoogle.com/kickstart/round/0000000000435c44/00000000007ec290
+Kick Start 2021 Round C Binary Operator https://codingcompetitions.withgoogle.com/kickstart/round/0000000000435c44/00000000007ec290
+https://codeforces.com/problemset/problem/1689/D https://www.luogu.com.cn/blog/wangxiwen/solution-cf1689d
+https://atcoder.jp/contests/abc272/tasks/abc272_g
+todo https://codeforces.com/problemset/problem/364/D 2900
+推荐 https://atcoder.jp/contests/abc339/tasks/abc339_f
+
+随机映射
+https://codeforces.com/problemset/problem/1746/F 2800
+
+异或哈希 xor hashing
+https://codeforces.com/problemset/problem/1996/G 2200
+https://codeforces.com/problemset/problem/1830/C 2400
+https://codeforces.com/problemset/problem/1771/F 2500
+
+多项式哈希 加法哈希
+https://codeforces.com/problemset/problem/869/E 2400
 */
 
 /* 模拟退火 (Simulated Annealing, SA)
@@ -28,7 +62,9 @@ https://www.cnblogs.com/ECJTUACM-873284962/p/8468831.html
 Heuristic algorithm for Hamiltonian path in undirected graphs https://codeforces.com/blog/entry/90743
 
 模板题 https://www.luogu.com.cn/problem/P1337
-LC1515 https://leetcode-cn.com/problems/best-position-for-a-service-centre/ http://poj.org/problem?id=2420 UVa 10228 https://onlinejudge.org/index.php?option=com_onlinejudge&Itemid=8&category=14&page=show_problem&problem=1169
+LC1515 https://leetcode.cn/problems/best-position-for-a-service-centre/
+http://poj.org/problem?id=2420
+UVa 10228 https://onlinejudge.org/index.php?option=com_onlinejudge&Itemid=8&category=14&page=show_problem&problem=1169
 todo 教学题 https://atcoder.jp/contests/intro-heuristics/tasks/intro_heuristics_a
  https://atcoder.jp/contests/ahc001/tasks/ahc001_a
  https://atcoder.jp/contests/ahc002/tasks/ahc002_a

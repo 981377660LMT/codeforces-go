@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+// 已废弃！请移步新版本泛型代码 ./treap/
+
 /* 树堆 treap=tree+heap
 本质上属于笛卡尔树，见 cartesian_tree.go
 
@@ -14,14 +16,15 @@ https://en.wikipedia.org/wiki/Treap
 复杂度证明 http://www.cs.cmu.edu/afs/cs/academic/class/15210-s12/www/lectures/lecture16.pdf
 部分代码参考刘汝佳实现，见 https://github.com/klb3713/aoapc-book/blob/master/TrainingGuide/bookcodes/ch3/la5031.cpp
 额外维护子树和的写法见 https://codeforces.com/contest/1398/submission/119651187
+todo Merging treaps https://codeforces.com/blog/entry/108601
 
-模板题 https://www.luogu.com.cn/problem/P3369 https://www.luogu.com.cn/problem/P6136
+模板题 https://www.luogu.com.cn/problem/P3369 
+      https://www.luogu.com.cn/problem/P6136
 题目推荐 https://cp-algorithms.com/data_structures/treap.html#toc-tgt-8
-
-EXTRA: FHQ Treap
-https://baobaobear.github.io/post/20191215-fhq-treap/
-FHQ-Treap 学习笔记 + 一堆题目 https://www.luogu.com.cn/blog/85514/fhq-treap-xue-xi-bi-ji
-https://www.luogu.com.cn/blog/specialflag/solution-p3369
+https://codeforces.com/problemset/problem/85/D 较为复杂的维护
+https://atcoder.jp/contests/abc245/tasks/abc245_e 离线+lowerbound+delete
+https://atcoder.jp/contests/abc356/tasks/abc356_f 维护关键位置
+https://atcoder.jp/contests/aising2020/tasks/aising2020_e
 */
 
 // 用 GoLand 的话强烈建议加入到 Live Templates 中，比赛时直接敲快捷键
@@ -94,7 +97,7 @@ func newTreap() *treap {
 
 // https://www.jstatsoft.org/article/view/v008i14/xorshift.pdf
 // https://en.wikipedia.org/wiki/Xorshift
-// 当然，也可以用 rand.Int() 或者 rd: rand.NewSource 后 rd.Int63()，后者速度略慢于 fastRand
+// 任何 Go 版本都通用的写法
 func (t *treap) fastRand() uint {
 	t.rd ^= t.rd << 13
 	t.rd ^= t.rd >> 17
@@ -145,7 +148,7 @@ func (t *treap) _delete(o *tpNode, key tpKeyType) *tpNode {
 			if o.lr[0] == nil {
 				return o.lr[1]
 			}
-			// o 有两颗子树，把优先级高的子树旋转到根，然后递归在另一棵子树中删除 o
+			// o 有两棵子树，把优先级高的子树旋转到根，然后递归在另一棵子树中删除 o
 			d = 0
 			if o.lr[0].priority > o.lr[1].priority {
 				d = 1
@@ -160,7 +163,7 @@ func (t *treap) _delete(o *tpNode, key tpKeyType) *tpNode {
 
 func (t *treap) delete(key tpKeyType) { t.root = t._delete(t.root, key) }
 
-// 其余通用方法见 bst.go
+// 其余通用方法，例如 get/find/prev/next/min/max 见 bst.go
 
 //
 

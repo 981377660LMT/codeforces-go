@@ -1,34 +1,40 @@
-#### 提示 1
+## 提示 1
 
 由于价值都是正数，因此价值和最小的一条路径一定**只有一个点**。
 
-#### 提示 2
+## 提示 2
 
-根据提示 1，「价值和最大的一条路径与最小的一条路径的差值」等价于「去掉路径的一个端点」。
+根据提示 1，「价值和最大的一条路径与最小的一条路径的差值」等价于「去掉路径的一个端点」，因为这两条路径都是从一个点出发的。
 
-#### 提示 3
+## 提示 3
 
 由于价值都是正数，一条路径能延长就尽量延长，这样路径和就越大，那么最优是延长到叶子。
 
-根据提示 2，问题转换成**去掉一个叶子**后的**最大路径和**（这里的叶子严格来说是度为 $1$ 的点，因为根的度数也可能是 $1$）。
+根据提示 2，问题转换成**去掉一个叶子**后的**最大路径和**。
 
-#### 提示 4
+> 这里的叶子严格来说是度为 $1$ 的点，因为根的度数也可能是 $1$。
 
-最大路径和是一个经典树形 DP 问题，类似「树的直径」。由于我们需要去掉一个叶子，那么可以让子树返回两个值：
+## 提示 4
 
-- 带叶子的最大路径和；
-- 不带叶子的最大路径和。
+最大路径和是一个经典树形 DP 问题，类似 [树的直径](https://www.bilibili.com/video/BV17o4y187h1/)。
 
-对于当前节点，它有多棵子树，我们一棵棵 DFS，假设当前 DFS 完了其中一棵子树，它返回了「当前带叶子的路径和」和「当前不带叶子的路径和」，那么答案有两种情况：
+设 $y$ 是 $x$ 的一个儿子，想象有一条路径在 $x$ 拐弯，那么这条路径可以看成是由「从 $x$ 出发往下的路径」和「从 $y$ 出发往下的路径」拼接而成（这两条路径不重叠）。
 
-- 前面最大带叶子的路径和 + 当前不带叶子的路径和；
-- 前面最大不带叶子的路径和 + 当前带叶子的路径和；
+对于当前节点 $x$，假设它有多棵子树，我们一棵棵 DFS，同时维护「从 $x$ 出发往下的最大带叶子的路径和」和「从 $x$ 出发往下的最大不带叶子的路径和」。
 
-然后更新「最大带叶子的路径和」和「最大不带叶子的路径和」。
+假设当前 DFS 完了 $x$ 的其中一棵子树 $y$，它返回了「从 $y$ 出发往下的最大带叶子的路径和」和「从 $y$ 出发往下的最大不带叶子的路径和」，那么答案可能是：
 
-最后返回「最大带叶子的路径和」和「最大不带叶子的路径和」，用来供父节点计算。
+- 从 $x$ 出发往下的最大带叶子的路径和 + 从 $y$ 出发往下的最大不带叶子的路径和。
+- 从 $x$ 出发往下的最大不带叶子的路径和 + 从 $y$ 出发往下的最大带叶子的路径和。
 
-附：[视频讲解](https://www.bilibili.com/video/BV1QT41127kJ/)。
+然后更新：
+
+- 从 $y$ 出发往下的最大带叶子的路径和，加上 $\textit{price}[x]$，去更新从 $x$ 出发往下的最大带叶子的路径和。
+- 从 $y$ 出发往下的最大不带叶子的路径和，加上 $\textit{price}[x]$，去更新从 $x$ 出发往下的最大不带叶子的路径和。
+
+最后返回「从 $x$ 出发往下的最大带叶子的路径和」和「从 $x$ 出发往下的最大不带叶子的路径和」，提供给 $x$ 的父节点计算。
+
+附：[本题视频讲解](https://www.bilibili.com/video/BV1QT41127kJ/)。
 
 ```py [sol1-Python3]
 class Solution:
@@ -39,7 +45,6 @@ class Solution:
             g[y].append(x)  # 建树
 
         ans = 0
-        # 返回带叶子的最大路径和，不带叶子的最大路径和
         def dfs(x: int, fa: int) -> (int, int):
             nonlocal ans
             max_s1 = p = price[x]
@@ -76,7 +81,6 @@ class Solution {
         return ans;
     }
 
-    // 返回带叶子的最大路径和，不带叶子的最大路径和
     private long[] dfs(int x, int fa) {
         long p = price[x], maxS1 = p, maxS2 = 0;
         for (var y : g[x])
@@ -106,7 +110,6 @@ public:
         }
 
         long ans = 0;
-        // 返回带叶子的最大路径和，不带叶子的最大路径和
         function<pair<long, long>(int, int)> dfs = [&](int x, int fa) -> pair<long, long> {
             long p = price[x], max_s1 = p, max_s2 = 0;
             for (int y : g[x])
@@ -135,7 +138,6 @@ func maxOutput(n int, edges [][]int, price []int) int64 {
 		g[x] = append(g[x], y)
 		g[y] = append(g[y], x) // 建树
 	}
-	// 返回带叶子的最大路径和，不带叶子的最大路径和
 	var dfs func(int, int) (int, int)
 	dfs = func(x, fa int) (int, int) {
 		p := price[x]
@@ -164,8 +166,11 @@ func max(a, b int) int { if b > a { return b }; return a }
 - 时间复杂度：$O(n)$。
 - 空间复杂度：$O(n)$。
 
-#### 相似题目
+## 相似题目
 
+- [543. 二叉树的直径](https://leetcode.cn/problems/diameter-of-binary-tree/)
 - [124. 二叉树中的最大路径和](https://leetcode.cn/problems/binary-tree-maximum-path-sum/)
-- [1245. 树的直径](https://leetcode-cn.com/problems/tree-diameter/)
+- [1245. 树的直径](https://leetcode-cn.com/problems/tree-diameter/)（会员题）
 - [2246. 相邻字符不同的最长路径](https://leetcode.cn/problems/longest-path-with-different-adjacent-characters/)
+- [687. 最长同值路径](https://leetcode.cn/problems/longest-univalue-path/)
+- [1617. 统计子树中城市之间最大距离](https://leetcode.cn/problems/count-subtrees-with-max-distance-between-cities/)
