@@ -3,11 +3,18 @@ package copypasta
 import (
 	. "fmt"
 	"io"
+	"slices"
 )
 
 /* 并查集
 只有路径压缩的并查集复杂度是 O(nlogn) 的，这也是大多数情况下的实现方案
 只有启发式合并（按深度合并）的并查集的复杂度也是 O(nlogn) 的，适用于可持久化的场景
+
+只有路径压缩的并查集，可以构造一棵二项树（binomial tree）
+结合图片讲解 https://upload.wikimedia.org/wikipedia/commons/c/cf/Binomial_Trees.svg (https://en.wikipedia.org/wiki/Binomial_heap)
+每次把二项树的根节点连到一个新的孤立点上，然后对最深的点调用 find
+这样可以得到一棵几乎一样的树（区别仅仅是根节点多了一个儿子）
+所以，只要重复上述过程，就可以让每次 find 都是 O(logn) 级别的了
 
 具体的时间复杂度证明见《算法导论》
 https://zhuanlan.zhihu.com/p/553192435
@@ -20,12 +27,65 @@ https://zhuanlan.zhihu.com/p/553192435
 // https://oi-wiki.org/ds/dsu/
 // https://cp-algorithms.com/data_structures/disjoint_set_union.html
 // 并查集时间复杂度证明 https://oi-wiki.org/ds/dsu-complexity/
+// RMQ 标准算法和线性树上并查集 https://ljt12138.blog.uoj.ac/blog/4874
 //
-// 模板题 https://www.luogu.com.cn/problem/P3367
+// 另见 graph.go 中的 MST
+//
+// 模板题 LC547 https://leetcode.cn/problems/number-of-provinces/
+// LC684 https://leetcode.cn/problems/redundant-connection/
+// LC1267 https://leetcode.cn/problems/count-servers-that-communicate/
+// 并查集+置换 LC2459 https://leetcode.cn/problems/sort-array-by-moving-items-to-empty-space/
+// https://www.luogu.com.cn/problem/P1111
+// https://www.luogu.com.cn/problem/P1967 经典题
+// https://www.luogu.com.cn/problem/P3367
 // https://atcoder.jp/contests/arc097/tasks/arc097_b
-// 基础题 https://codeforces.com/problemset/problem/1411/C
+// 基础题 https://codeforces.com/problemset/problem/1167/C 1400
+//       https://codeforces.com/problemset/problem/2060/E 1500
+//       https://codeforces.com/problemset/problem/1411/C 1700
+// https://codeforces.com/problemset/problem/755/C 1300
+// LC1562 https://leetcode.cn/problems/find-latest-group-of-size-m/
+// 转换 https://atcoder.jp/contests/abc304/tasks/abc304_e
+// 转换 https://atcoder.jp/contests/abc238/tasks/abc238_e
+// merge 后 from 还有用 https://atcoder.jp/contests/abc279/tasks/abc279_f
+// 处理图上的环 https://codeforces.com/contest/1726/problem/D
+// https://codeforces.com/problemset/problem/1851/G 2000 离线
+// 对偶图 LC3235 https://leetcode.cn/problems/check-if-the-rectangle-corner-is-reachable/
+// - 思考：如果允许圆心在矩形外呢？见我题解下面的讨论
+// https://atcoder.jp/contests/abc383/tasks/abc383_e
+// https://atcoder.jp/contests/abc392/tasks/abc392_e
+//
+// 质因子并查集 GCD>1 并查集
+// 预处理质因子（见 math.go 中的 primeDivisorsAll）
+// 枚举 a[i] 的质因子 p，用 pre[p] 记录质因子上一次出现的下标（初始化成 -1），然后 merge(i, pre[p]) if pre[p] > 0
+// - [2709. 最大公约数遍历](https://leetcode.cn/problems/greatest-common-divisor-traversal/) 2172
+// - [1627. 带阈值的图连通性](https://leetcode.cn/problems/graph-connectivity-with-threshold/) 2221
+// - [952. 按公因数计算最大组件大小](https://leetcode.cn/problems/largest-component-size-by-common-factor/) 2272
+//       下标距离有上界 https://codeforces.com/contest/1978/problem/F
+// - [1998. 数组的最大公因数排序](https://leetcode.cn/problems/gcd-sort-of-an-array/) 2429
+//
+// 数组标记/区间合并相关
+// - 经典模型是一维区间覆盖染色，通过倒序+并查集解决
+// - 顺带补充下二维的情况（非并查集）：LC2718 https://leetcode.cn/problems/sum-of-matrix-after-queries/
+// - [1851. 包含每个查询的最小区间](https://leetcode.cn/problems/minimum-interval-to-include-each-query/)
+// - [2382. 删除操作后的最大子段和](https://leetcode.cn/problems/maximum-segment-sum-after-removals/)
+// - [2334. 元素值大于变化阈值的子数组](https://leetcode.cn/problems/subarray-with-elements-greater-than-varying-threshold/)
+// - [2612. 最少翻转操作数](https://leetcode.cn/problems/minimum-reverse-operations/)
+// https://codeforces.com/problemset/problem/1041/C 1600
+// https://codeforces.com/problemset/problem/827/A 1700
+// https://codeforces.com/problemset/problem/1157/E 1700
+// https://codeforces.com/problemset/problem/724/D 1900
+// https://codeforces.com/problemset/problem/2018/D 2200
+// https://www.codechef.com/problems/REMSUBARR
+//
+// 树+点权/边权的顺序
+// LC2421 https://leetcode.cn/problems/number-of-good-paths/
+// 贡献法 https://codeforces.com/problemset/problem/915/F
+// 贡献法 https://atcoder.jp/contests/abc214/tasks/abc214_d
+//
+// LC2503 https://leetcode.cn/problems/maximum-number-of-points-from-grid-queries/
 // 接水问题 https://codeforces.com/problemset/problem/371/D
-// 三维接雨水 https://www.luogu.com.cn/problem/P5930 LC407 https://leetcode-cn.com/problems/trapping-rain-water-ii/
+// LC407 三维接雨水 https://leetcode.cn/problems/trapping-rain-water-ii/
+// - https://www.luogu.com.cn/problem/P5930 
 // 使某些点不在环上需要删除的最少边数 https://ac.nowcoder.com/acm/contest/7780/C
 // todo https://codeforces.com/problemset/problem/292/D
 // 任意合并+区间合并 https://codeforces.com/problemset/problem/566/D
@@ -33,16 +93,41 @@ https://zhuanlan.zhihu.com/p/553192435
 // 思维转换 https://nanti.jisuanke.com/t/43488
 //         https://codeforces.com/problemset/problem/1012/B
 //         https://codeforces.com/problemset/problem/1466/F
+// https://codeforces.com/problemset/problem/455/C 2100
 // 前缀和 后缀和 https://codeforces.com/problemset/problem/292/D
 // 维护树或基环树 https://codeforces.com/problemset/problem/859/E
-// 求矩阵的 rank 矩阵 https://codeforces.com/problemset/problem/650/C LC1632 https://leetcode-cn.com/problems/rank-transform-of-a-matrix/submissions/
-// 分组排序套路 LC1998 https://leetcode-cn.com/problems/gcd-sort-of-an-array/
+// 求矩阵的 rank 矩阵 https://codeforces.com/problemset/problem/650/C LC1632 https://leetcode.cn/problems/rank-transform-of-a-matrix/submissions/
+// 分组排序套路 LC1998 https://leetcode.cn/problems/gcd-sort-of-an-array/
 // 套题 https://blog.csdn.net/weixin_43914593/article/details/104108049 算法竞赛专题解析（3）：并查集
-// [1700] 转换 https://codeforces.com/problemset/problem/1253/D
-// 离散 + 四方向 https://codingcompetitions.withgoogle.com/kickstart/round/0000000000050ff2/0000000000150aac#analysis
+// 转换 https://codeforces.com/problemset/problem/1253/D
+// 离散 + 四方向 Kick Start 2019 Round C Wiggle Walk https://codingcompetitions.withgoogle.com/kickstart/round/0000000000050ff2/0000000000150aac#analysis
+// 能力守恒+离线 https://codeforces.com/contest/1851/problem/G
 // 技巧：去掉无用数据
 // - https://codeforces.com/problemset/problem/1157/E
 // - https://codeforces.com/problemset/problem/1791/F
+// todo https://codeforces.com/contest/884/problem/E
+// https://codeforces.com/problemset/problem/1416/D 2600 DSU 重构树
+
+// 轻量级模板
+// 采用非递归写法，效率更好
+func _(n int) {
+	fa := make([]int, n)
+	for i := range fa {
+		fa[i] = i
+	}
+	find := func(x int) int {
+		rt := x
+		for fa[rt] != rt {
+			rt = fa[rt]
+		}
+		for fa[x] != rt {
+			fa[x], x = rt, fa[x]
+		}
+		return rt
+	}
+	_ = find
+}
+
 type UnionFind struct {
 	Fa     []int
 	Groups int // 连通分量个数
@@ -56,9 +141,22 @@ func NewUnionFind(n int) UnionFind {
 	return UnionFind{fa, n}
 }
 
+// 非递归版本
 func (u UnionFind) Find(x int) int {
+	root := x
+	for u.Fa[root] != root {
+		root = u.Fa[root]
+	}
+	for u.Fa[x] != root {
+		u.Fa[x], x = root, u.Fa[x]
+	}
+	return root
+}
+
+// 递归版本
+func (u UnionFind) FindR(x int) int {
 	if u.Fa[x] != x {
-		u.Fa[x] = u.Find(u.Fa[x])
+		u.Fa[x] = u.FindR(u.Fa[x])
 	}
 	return u.Fa[x]
 }
@@ -106,8 +204,10 @@ func _(n int) {
 	}
 
 	{
-		// 离散化版本
+		// 哈希表版本离散化版本
 		// LC947 https://leetcode.cn/problems/most-stones-removed-with-same-row-or-column/
+		// https://codeforces.com/problemset/problem/506/D 2400
+		// class 版本见 https://codeforces.com/problemset/submission/506/247878263
 		fa := map[int]int{}
 		groups := 0
 		var find func(int) int
@@ -139,14 +239,19 @@ func _(n int) {
 		_ = merge
 	}
 
-	mergeRangeTo := func(l, r, to int) { // 常用：to=r+1，这时建议用左闭右开表示区间
-		//if l < 0 {
-		//	l = 0
-		//}
-		//if r > n {
-		//	r = n
-		//}
-		for i := find(l); i <= r; i = find(i + 1) { // initFa 需要开 n+1 空间
+	// 区间并查集 / 涂色并查集 / 刷墙并查集
+	// LC1851 https://leetcode.cn/problems/minimum-interval-to-include-each-query/ 2286
+	// - 变形：额外传入数组 nums，计算包含元素值为 queries[i] 的最短的 intervals[i]
+	// LC2158 https://leetcode.cn/problems/amount-of-new-area-painted-each-day/
+	// https://codeforces.com/problemset/problem/371/D 1800 经典题
+	// https://codeforces.com/problemset/problem/2020/D 1800
+	// https://codeforces.com/problemset/problem/724/D 1900
+	mergeRangeTo := func(l, r, to int) { 
+		// 常用：to = r + 1，这时建议用左闭右开表示区间
+		// 或者 to = find(r)
+		// l = max(l, 1)
+		// r = min(r, n)
+		for i := find(l); i <= r; i = find(i + 1) { // initFa 需要开 n+1 空间（或者 n+2，如果下标从 1 开始）
 			fa[i] = to
 		}
 	}
@@ -184,6 +289,32 @@ func _(n int) {
 		return
 	}
 
+	// 同一连通块内的数字从小到大排序
+	// https://codeforces.com/contest/1971/problem/G
+	sortCC := func(a []int) {
+		n := len(a)
+		comps := make([][]int, n)
+		for i := 0; i < n; i++ {
+			rt := find(i)
+			comps[rt] = append(comps[rt], i)
+		}
+		for _, cc := range comps {
+			if cc == nil {
+				continue
+			}
+			// 注意 cc 已经是有序的
+			// 收集连通块内的元素，排序，然后重新填回去
+			b := make([]int, len(cc))
+			for ci, i := range cc {
+				b[ci] = a[i]
+			}
+			slices.Sort(b)
+			for ci, i := range cc {
+				a[i] = b[ci]
+			}
+		}
+	}
+
 	{
 		// 按秩合并
 		rank := make([]int, n)
@@ -203,8 +334,59 @@ func _(n int) {
 		_ = merge
 	}
 
-	_ = []interface{}{merge, same, mergeBig, mergeRangeTo, getRoots, countRoots, getComps}
+	_ = []interface{}{merge, same, mergeBig, mergeRangeTo, getRoots, countRoots, getComps, sortCC}
 }
+
+// 用并查集实现有序集合的删除、查找前驱和查找后继
+// 无法构造一棵二项树，单次操作均摊复杂度是 O(1) 的
+// LC https://leetcode.cn/problems/block-placement-queries/
+type delUf struct {
+	left  []int
+	right []int
+}
+
+func newDelUf(n int) delUf {
+	// 把 0 和 n+1 当作哨兵
+	// 如果有删除 0 的情况，想清楚有没有 corner case
+	left := make([]int, n+2)
+	right := make([]int, n+2)
+	for i := range left {
+		left[i] = i
+		right[i] = i
+	}
+	return delUf{left, right}
+}
+
+func (f delUf) _find(fa []int, x int) int {
+	if fa[x] != x {
+		fa[x] = f._find(fa, fa[x])
+	}
+	return fa[x]
+}
+
+// 删除 x
+func (f delUf) delete(x int) {
+	if f._find(f.left, x) != x { // x 已经被删除
+		return
+	}
+	f.left[x] = x - 1
+	f.right[x] = x + 1
+}
+
+// 查找前驱：返回严格小于 x 的最大元素
+func (f delUf) prev(x int) int {
+	if x <= 0 {
+		panic("x must be positive")
+	}
+	return f._find(f.left, x-1)
+}
+
+// 查找后继：返回严格大于 x 的最小元素
+func (f delUf) next(x int) int {
+	return f._find(f.right, x+1)
+}
+
+//
 
 // 二维并查集
 type ufPoint struct{ x, y int } // int32
@@ -230,21 +412,25 @@ func moveRobot(start ufPoint, command string) ufPoint {
 		e.merge(p, ufPoint{p.x, p.y + 1})
 		s.merge(p, ufPoint{p.x + 1, p.y})
 		switch c {
-		case 'W': p = w.find(p)
-		case 'N': p = n.find(p)
-		case 'E': p = e.find(p)
-		default:  p = s.find(p)
+		case 'W':
+			p = w.find(p)
+		case 'N':
+			p = n.find(p)
+		case 'E':
+			p = e.find(p)
+		default:
+			p = s.find(p)
 		}
 	}
 	return p
 }
 
-// 并查集 - 维护点权
+// 点权并查集
 // 维护的可以是集合的大小、最值、XOR、GCD 等
 // https://codeforces.com/edu/course/2/lesson/7/1/practice/contest/289390/problem/B
 // https://codeforces.com/problemset/problem/1609/D
 // LC1562 https://leetcode.cn/problems/find-latest-group-of-size-m/
-// 哈希表写法 https://leetcode-cn.com/problems/groups-of-strings/
+// 哈希表写法 https://leetcode.cn/problems/groups-of-strings/
 // https://atcoder.jp/contests/arc107/tasks/arc107_c
 func _(n int) {
 	groups := n
@@ -283,7 +469,7 @@ func _(n int) {
 	_ = []interface{}{merge, same, size}
 }
 
-// 并查集 - 维护边权（种类）
+// 边权并查集（种类并查集）
 // 核心在于：
 //    2 ------ 4
 //   /        /
@@ -296,19 +482,24 @@ func _(n int) {
 // https://cp-algorithms.com/data_structures/disjoint_set_union.html#toc-tgt-11
 // https://cp-algorithms.com/data_structures/disjoint_set_union.html#toc-tgt-12
 // https://oi-wiki.org/ds/dsu/#_9
-// 模板题 https://codeforces.com/problemset/problem/1074/D https://codeforces.com/edu/course/2/lesson/7/2/practice/contest/289391/problem/D
-// 种类并查集：同义词反义词 https://codeforces.com/problemset/problem/766/D
-// 种类并查集：狼人和平民 https://codeforces.com/problemset/problem/1594/D
+//
+// 模板题 https://codeforces.com/problemset/problem/1850/H 1700
+//       https://codeforces.com/problemset/problem/1074/D 2400? 1700!
+//       https://codeforces.com/edu/course/2/lesson/7/2/practice/contest/289391/problem/D
+// 种类并查集：狼人和平民 https://codeforces.com/problemset/problem/1594/D 1700
+// 种类并查集：同义词反义词 https://codeforces.com/problemset/problem/766/D 2000
 // 种类并查集：食物链 https://www.luogu.com.cn/problem/P2024
 // 种类并查集：不能构成二分图的第一条边 https://codeforces.com/edu/course/2/lesson/7/2/practice/contest/289391/problem/J
-// 种类并查集 + 维护集合大小 https://codeforces.com/problemset/problem/1290/C
+// 种类并查集 + 维护集合大小 https://codeforces.com/problemset/problem/1290/C 2400
 // todo https://codeforces.com/contest/1615/problem/D
 //      https://codeforces.com/contest/1713/problem/E
 // 边权：https://codeforces.com/edu/course/2/lesson/7/1/practice/contest/289390/problem/C
-// 边权：LC399 除法求值 https://leetcode-cn.com/problems/evaluate-division/
+// 边权：LC399 除法求值 https://leetcode.cn/problems/evaluate-division/
+//      LC2307 https://leetcode.cn/problems/check-for-contradictions-in-equations/ 也可以 DFS
+// https://codeforces.com/problemset/problem/1788/F 2500
 func _(n int) {
 	// 注：kinds 为 2 时可以用异或来代替加减法
-	const kinds = 2
+	const kinds = 3
 	fa := make([]int, n) // n+1
 	for i := range fa {
 		fa[i] = i
@@ -318,13 +509,16 @@ func _(n int) {
 	find = func(x int) int {
 		if fa[x] != x {
 			ffx := find(fa[x])
-			dis[x] += dis[fa[x]]
+			dis[x] += dis[fa[x]] //
 			fa[x] = ffx
 		}
 		return fa[x]
 	}
-	// 调用前需要保证 same(x, y) 为 true
+	same := func(x, y int) bool { return find(x) == find(y) }
 	delta := func(x, y int) int {
+		if !same(x, y) { // 如果题目保证 same，则可以去掉
+			return -1
+		}
 		find(x)
 		find(y)
 		return ((dis[x]-dis[y])%kinds + kinds) % kinds
@@ -337,7 +531,6 @@ func _(n int) {
 		}
 		return delta(from, to) == d
 	}
-	same := func(x, y int) bool { return find(x) == find(y) }
 
 	// 统计每个集合中各个类型的个数
 	cnt := make([][kinds]int, len(fa))
@@ -449,9 +642,12 @@ func (o *pufNode) merge(x, y int) *pufNode {
 // https://codeforces.com/gym/100551/problem/A
 // https://codeforces.com/edu/course/2/lesson/7/3/practice/contest/289392/problem/C
 // https://loj.ac/p/121
-// todo https://codeforces.com/contest/891/problem/C
-//  https://codeforces.com/contest/1681/problem/F
-// todo Dynamic connectivity contest https://codeforces.com/gym/100551
+// https://atcoder.jp/contests/abc302/tasks/abc302_h （基于 https://atcoder.jp/contests/arc111/tasks/arc111_b）
+// https://www.luogu.com.cn/problem/P5631
+// https://codeforces.com/contest/891/problem/C
+// https://codeforces.com/problemset/problem/1217/F
+// https://codeforces.com/contest/1681/problem/F
+// Dynamic connectivity contest https://codeforces.com/gym/100551
 func dynamicConnectivity(in io.Reader, n, q int) (ans []int) {
 	if q == 0 {
 		return

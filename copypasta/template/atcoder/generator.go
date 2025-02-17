@@ -79,8 +79,7 @@ func fetchTaskNum(contestID string) (taskNum int, err error) {
 
 func login(username, password string) (session *grequests.Session, err error) {
 	session = grequests.NewSession(&grequests.RequestOptions{
-		UserAgent:    ua,
-		UseCookieJar: true,
+		UserAgent: ua,
 	})
 
 	// "touch" home page to get CSRF token
@@ -171,11 +170,11 @@ func parseTask(session *grequests.Session, problemURL string) (sampleIns, sample
 
 	// 解析样例输入输出
 	const (
-		tokenInputJP  = "入力例"
-		tokenOutputJP = "出力例"
+		tokenInputJP  = "^入力例"
+		tokenOutputJP = "^出力例"
 
-		tokenInputEN  = "Sample Input "
-		tokenOutputEN = "Sample Output "
+		tokenInputEN  = "^Sample Input "
+		tokenOutputEN = "^Sample Output "
 	)
 
 	inputRegex := regexp.MustCompile(tokenInputEN + `\d+`)
@@ -222,24 +221,23 @@ func genTemplates(session *grequests.Session, problemURL string, isContest bool)
 	}
 
 	problemName := filepath.Base(problemURL)
-	sp := strings.Split(problemName, "_")
-	if len(sp) != 2 {
+	spIdx := strings.LastIndexByte(problemName, '_')
+	if spIdx < 0 {
 		return fmt.Errorf("invlaid url %s", problemURL)
 	}
 
-	contestID, taskID := sp[0], sp[1]
+	dirID, taskID := problemName[:spIdx], problemName[spIdx+1:]
+	contestName := strings.ReplaceAll(dirID, "_", "-")
 
 	// 生成目录
-	dirPath := filepath.Join(contestDir, contestID, taskID) + "/"
+	dirPath := filepath.Join(contestDir, dirID, taskID) + "/"
 	if err := os.MkdirAll(dirPath, os.ModePerm); err != nil {
 		return err
 	}
 
-	submitURL := fmt.Sprintf("https://atcoder.jp/contests/%s/submit?taskScreenName=%s", contestID, problemName)
-	statusURL := fmt.Sprintf("https://atcoder.jp/contests/%s/submissions?f.LanguageName=Go&f.Status=AC&f.Task=%s&orderBy=source_length", contestID, problemName)
-	if !isContest {
-		open.Run(statusURL)
-	}
+	submitURL := fmt.Sprintf("https://atcoder.jp/contests/%s/submit?taskScreenName=%s", contestName, problemName)
+	statusURL := fmt.Sprintf("https://atcoder.jp/contests/%s/submissions?f.LanguageName=Go&f.Status=AC&f.Task=%s&orderBy=source_length", contestName, problemName)
+	shortestURL := fmt.Sprintf("https://atcoder.jp/contests/%s/submissions?f.Status=AC&f.Task=%s&orderBy=source_length", contestName, problemName)
 
 	// 创建 x.go
 	mainFileContent := `package main
@@ -251,9 +249,8 @@ import (
 	"os"
 )
 
-// https://space.bilibili.com/206214
-func run(_r io.Reader, _w io.Writer) {
-	in := bufio.NewReader(_r)
+// https://github.com/EndlessCheng
+func run(in io.Reader, _w io.Writer) {
 	out := bufio.NewWriter(_w)
 	defer out.Flush()
 
@@ -262,12 +259,16 @@ func run(_r io.Reader, _w io.Writer) {
 
 }
 
-func main() { run(os.Stdin, os.Stdout) }
+func main() { run(bufio.NewReader(os.Stdin), os.Stdout) }
 `
 	mainFilePath := dirPath + taskID + ".go"
 	if !isContest || taskID == "a" {
 		// 比赛时，在 IDE 中打开 A 题
 		defer open.Run(absPath(mainFilePath))
+	}
+	if _, err := os.Stat(mainFilePath); !os.IsNotExist(err) {
+		open.Run(absPath(mainFilePath))
+		return fmt.Errorf("文件已存在！")
 	}
 	if err := os.WriteFile(mainFilePath, []byte(mainFileContent), 0644); err != nil {
 		return err
@@ -290,17 +291,17 @@ import (
 	"testing"
 )
 
+// 题目：%s
 // 提交：%s
 // 对拍：%s
-func Test_run(t *testing.T) {
-	t.Log("Current test is [%s]")
+// 最短：%s
+func Test_%s(t *testing.T) {
 	testCases := [][2]string{%s
 		
 	}
 	testutil.AssertEqualStringCase(t, testCases, 0, run)
 }
-// %s
-`, submitURL, statusURL, taskID, examples, problemURL)
+`, problemURL, submitURL, statusURL, shortestURL, taskID, examples)
 	testFilePath := dirPath + taskID + "_test.go"
 	if err := os.WriteFile(testFilePath, []byte(testFileContent), 0644); err != nil {
 		return err
@@ -319,8 +320,7 @@ func genAtCoderContestTemplates(contestID string, taskNum, retryTimes int) error
 
 	const ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.106 Safari/537.36"
 	session := grequests.NewSession(&grequests.RequestOptions{
-		UserAgent:    ua,
-		UseCookieJar: true,
+		UserAgent: ua,
 	})
 
 	tasksHome := fmt.Sprintf("https://atcoder.jp/contests/%s/tasks", contestID)
@@ -393,8 +393,7 @@ func GenAtCoderContestTemplates(contestID string) error {
 func GenAtCoderProblemTemplate(problemURL string) error {
 	const ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.106 Safari/537.36"
 	session := grequests.NewSession(&grequests.RequestOptions{
-		UserAgent:    ua,
-		UseCookieJar: true,
+		UserAgent: ua,
 	})
 	return genTemplates(session, problemURL, false)
 }

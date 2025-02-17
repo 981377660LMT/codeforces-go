@@ -4,18 +4,36 @@ import (
 	"bytes"
 	"math"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 )
 
-/* 其他无法分类的算法
+/* 其他无法分类的算法 ad-hoc
+
+- [764. 最大加号标志](https://leetcode.cn/problems/largest-plus-sign/) 1753
+最大子矩形 https://www.luogu.com.cn/problem/P1578
+
+倒数平方根 https://www.bilibili.com/video/BV17N41167dR/
+
+小奥
+https://codeforces.com/problemset/problem/700/A
+
+消消乐
+- [954. 二倍数对数组](https://leetcode.cn/problems/array-of-doubled-pairs/) 1548
+- [2007. 从双倍数组中还原原数组](https://leetcode.cn/problems/find-original-array-from-doubled-array/) 1557
+
+原地哈希
+LC442 https://leetcode.cn/problems/find-all-duplicates-in-an-array/
 
 三维 n 皇后 https://oeis.org/A068940
 Maximal number of chess queens that can be placed on a 3-dimensional chessboard of order n so that no two queens attack each other
 
 Smallest positive integer k such that n = +-1+-2+-...+-k for some choice of +'s and -'s https://oeis.org/A140358
-相关题目 https://codeforces.com/problemset/problem/1278/B
+https://codeforces.com/problemset/problem/11/B
+https://codeforces.com/problemset/problem/1278/B
+LC754 https://leetcode.cn/problems/reach-a-number/ 1880
 
 Numbers n such that n is the substring identical to the least significant bits of its base 2 representation.
 https://oeis.org/A181891
@@ -37,12 +55,20 @@ https://oeis.org/A002024 n appears n times; a(n) = floor(sqrt(2n) + 1/2) https:/
 长度为 n 的所有二进制串，最多能划分出的 11 的个数之和 https://oeis.org/A045883
 相关题目 https://codeforces.com/contest/1511/problem/E
 
-4 汉诺塔 http://oeis.org/A007664
+https://oeis.org/A007302 Optimal cost function between two processors at distance n
+bits.OnesCount(3*n ^ n)
+LC2571 https://leetcode.cn/problems/minimum-operations-to-reduce-an-integer-to-0/
+解释 https://leetcode.cn/problems/minimum-operations-to-reduce-an-integer-to-0/solution/ji-yi-hua-sou-suo-by-endlesscheng-cm6l/
+
+4 汉诺塔 https://oeis.org/A007664
 Reve's puzzle: number of moves needed to solve the Towers of Hanoi puzzle with 4 pegs and n disks, according to the Frame-Stewart algorithm
 https://www.acwing.com/problem/content/description/98/
 
 麻将
 2021·昆明 https://ac.nowcoder.com/acm/contest/12548/K
+
+五子棋
+https://codeforces.com/contest/825/problem/B
 
 调度场算法 shunting-yard algorithm
 中缀转后缀
@@ -251,7 +277,7 @@ func miscCollection() {
 	}
 
 	// 01 矩阵，每个 1 位置向四个方向延伸连续 1 的最远距离
-	// https://codingcompetitions.withgoogle.com/kickstart/round/0000000000436140/000000000068c509
+	// Kick Start 2021 Round A L Shaped Plots https://codingcompetitions.withgoogle.com/kickstart/round/0000000000436140/000000000068c509
 	max1dir4 := func(a [][]int) (ls, rs, us, ds [][]int) {
 		n, m := len(a), len(a[0])
 		ls, rs = make([][]int, n), make([][]int, n)
@@ -372,7 +398,7 @@ func miscCollection() {
 // b 是 a 的一个排列（允许有重复元素）
 // 返回 b 中各个元素在 a 中的下标（重复的元素顺序保持一致）
 // 可用于求从 a 变到 b 需要的相邻位元素交换的最小次数，即返回结果的逆序对个数
-// LC1850 https://leetcode-cn.com/problems/minimum-adjacent-swaps-to-reach-the-kth-smallest-number/
+// LC1850 https://leetcode.cn/problems/minimum-adjacent-swaps-to-reach-the-kth-smallest-number/
 func mapPos(a, b []int) []int {
 	pos := map[int][]int{}
 	for i, v := range a {
@@ -386,19 +412,22 @@ func mapPos(a, b []int) []int {
 	return ids
 }
 
-// 归并排序与逆序对
-// LC 面试题 51 https://leetcode-cn.com/problems/shu-zu-zhong-de-ni-xu-dui-lcof/
-// EXTRA: LC315 https://leetcode-cn.com/problems/count-of-smaller-numbers-after-self/
-//        LC327 https://leetcode-cn.com/problems/count-of-range-sum/
-//        LC493 https://leetcode-cn.com/problems/reverse-pairs/
-// 一张关于归并排序的好图 https://www.cnblogs.com/chengxiao/p/6194356.html
-func mergeCount(a []int) int64 {
+/* 归并排序与逆序对
+一张关于归并排序的好图 https://www.cnblogs.com/chengxiao/p/6194356.html
+- 归并排序：[912. 排序数组](https://leetcode.cn/problems/sort-an-array/)
+- [LCR 170. 交易逆序对的总数](https://leetcode.cn/problems/shu-zu-zhong-de-ni-xu-dui-lcof/)
+- [327. 区间和的个数](https://leetcode.cn/problems/count-of-smaller-numbers-after-self/)
+- [327. 区间和的个数](https://leetcode.cn/problems/count-of-range-sum/)
+- [493. 翻转对](https://leetcode.cn/problems/reverse-pairs/)
+https://atcoder.jp/contests/arc075/tasks/arc075_c
+*/
+func mergeCount(a []int) int {
 	n := len(a)
 	if n <= 1 {
 		return 0
 	}
-	left := append([]int(nil), a[:n/2]...)
-	right := append([]int(nil), a[n/2:]...)
+	left := slices.Clone(a[:n/2])
+	right := slices.Clone(a[n/2:])
 	cnt := mergeCount(left) + mergeCount(right)
 	l, r := 0, 0
 	for i := range a {
@@ -407,7 +436,7 @@ func mergeCount(a []int) int64 {
 			a[i] = left[l]
 			l++
 		} else {
-			cnt += int64(n/2 - l)
+			cnt += n/2 - l
 			a[i] = right[r]
 			r++
 		}
@@ -420,11 +449,11 @@ func mergeCount(a []int) int64 {
 // Strong conjecture: there is a constant c around 2.54 such that a(n) is asymptotic to n!/c^n
 // Weak conjecture: lim_{n -> infinity} (1/n) * log(n!/a(n)) = constant = 0.90....
 // https://arxiv.org/pdf/2107.13460.pdf
-// LC51 https://leetcode-cn.com/problems/n-queens/
-// LC52 https://leetcode-cn.com/problems/n-queens-ii/
+// LC51 https://leetcode.cn/problems/n-queens/
+// LC52 https://leetcode.cn/problems/n-queens-ii/
 func totalNQueens(n int) (ans int) {
-	var f func(row, columns, diagonals1, diagonals2 int)
-	f = func(row, columns, diagonals1, diagonals2 int) {
+	var dfs func(int, int, int, int)
+	dfs = func(row, columns, diagonals1, diagonals2 int) {
 		if row == 1 {
 			ans++
 			return
@@ -432,17 +461,17 @@ func totalNQueens(n int) (ans int) {
 		availablePositions := (1<<n - 1) &^ (columns | diagonals1 | diagonals2)
 		for availablePositions > 0 {
 			position := availablePositions & -availablePositions
-			f(row+1, columns|position, (diagonals1|position)<<1, (diagonals2|position)>>1)
+			dfs(row+1, columns|position, (diagonals1|position)<<1, (diagonals2|position)>>1)
 			availablePositions &^= position // 移除该比特位
 		}
 	}
-	f(0, 0, 0, 0)
+	dfs(0, 0, 0, 0)
 	return
 }
 
 // 格雷码 https://oeis.org/A003188 https://oeis.org/A014550
 // https://en.wikipedia.org/wiki/Gray_code
-// LC89 https://leetcode-cn.com/problems/gray-code/
+// LC89 https://leetcode.cn/problems/gray-code/
 // 转换 https://codeforces.com/problemset/problem/1419/E
 func grayCode(length int) []int {
 	ans := make([]int, 1<<length)
@@ -491,7 +520,7 @@ func countValidSubstring(s string) (ans int) {
 }
 
 // 负二进制数相加
-// LC1073 https://leetcode-cn.com/problems/adding-two-negabinary-numbers/
+// LC1073 https://leetcode.cn/problems/adding-two-negabinary-numbers/
 func addNegabinary(a1, a2 []int) []int {
 	if len(a1) < len(a2) {
 		a1, a2 = a2, a1
@@ -522,26 +551,40 @@ func addNegabinary(a1, a2 []int) []int {
 }
 
 // 负二进制转换
-// LC1017 https://leetcode-cn.com/problems/convert-to-base-2/
-func toNegabinary(n int) (res string) {
+// https://atcoder.jp/contests/abc105/tasks/abc105_c
+// LC1017 https://leetcode.cn/problems/convert-to-base-2/
+func toNegabinary(n int) (ans string) {
 	if n == 0 {
 		return "0"
 	}
 	for ; n != 0; n = -(n >> 1) {
-		res = string(byte('0'+n&1)) + res
+		ans = string(byte('0'+n&1)) + ans
 	}
 	return
 }
 
 // 分数转小数
 // https://en.wikipedia.org/wiki/Repeating_decimal
+// Number of digits in decimal expansion of 1/n before the periodic part begins https://oeis.org/A051628
+// - 设 n=2^c2*5^c5*...，那么 A051628(n) = max(c2,c5)
 // Period of decimal representation of 1/n, or 0 if 1/n terminates https://oeis.org/A051626
+// - 如果 n 的质因子只有 2 和 5，那么不存在循环节
+// - 否则，先把 n 移除所有质因子 2 和 5，得到 m，那么 A051626(n) = n_order(10, m) 请看 math.go 中的「阶」
+// - 参考 https://zhuanlan.zhihu.com/p/346536813 https://www.zhihu.com/question/462266812
 // The periodic part of the decimal expansion of 1/n https://oeis.org/A036275
 // 例如 (2, -3) => ("-0.", "6")
 // b must not be zero
-// LC166 https://leetcode-cn.com/problems/fraction-to-recurring-decimal/
+//
+// https://oeis.org/A007732 Period of decimal representation of 1/n
+// https://oeis.org/A084680 Order of 10 modulo n [i.e., least m such that 10^m = 1 (mod n)] or 0 when no such number exists
+// https://oeis.org/A002329 Periods of reciprocals of integers prime to 10
+//
+// LC166 https://leetcode.cn/problems/fraction-to-recurring-decimal/
 // WF1990 https://www.luogu.com.cn/problem/UVA202
-func fractionToDecimal(a, b int64) (beforeCycle, cycle []byte) {
+// 1e12 加强版 https://ac.nowcoder.com/acm/contest/62622/E
+// Python 代码 https://ac.nowcoder.com/acm/contest/view-submission?submissionId=63288994
+// b 进制下是否为有限小数 https://codeforces.com/problemset/problem/983/A 1700
+func fractionToDecimal(a, b int) (beforeCycle, cycle []byte) {
 	if a == 0 {
 		return []byte{'0'}, nil
 	}
@@ -555,7 +598,7 @@ func fractionToDecimal(a, b int64) (beforeCycle, cycle []byte) {
 	if b < 0 {
 		b = -b
 	}
-	res = append(res, strconv.FormatInt(a/b, 10)...)
+	res = append(res, strconv.Itoa(a/b)...)
 
 	r := a % b
 	if r == 0 {
@@ -563,7 +606,7 @@ func fractionToDecimal(a, b int64) (beforeCycle, cycle []byte) {
 	}
 	res = append(res, '.')
 
-	posMap := map[int64]int{}
+	posMap := map[int]int{}
 	for r != 0 {
 		if pos, ok := posMap[r]; ok {
 			return res[:pos], res[pos:]
@@ -579,18 +622,18 @@ func fractionToDecimal(a, b int64) (beforeCycle, cycle []byte) {
 // 小数转分数
 // decimal like "2.15(376)", which means "2.15376376376..."
 // https://zh.wikipedia.org/wiki/%E5%BE%AA%E7%8E%AF%E5%B0%8F%E6%95%B0#%E5%8C%96%E7%82%BA%E5%88%86%E6%95%B8%E7%9A%84%E6%96%B9%E6%B3%95
-func decimalToFraction(decimal string) (a, b int64) {
+func decimalToFraction(decimal string) (a, b int) {
 	r := regexp.MustCompile(`(?P<integerPart>\d+)\.?(?P<nonRepeatingPart>\d*)\(?(?P<repeatingPart>\d*)\)?`)
 	match := r.FindStringSubmatch(decimal)
 	integerPart, nonRepeatingPart, repeatingPart := match[1], match[2], match[3]
-	intPartNum, _ := strconv.ParseInt(integerPart, 10, 64)
+	intPartNum, _ := strconv.Atoi(integerPart)
 	if repeatingPart == "" {
 		repeatingPart = "0"
 	}
-	b, _ = strconv.ParseInt(strings.Repeat("9", len(repeatingPart))+strings.Repeat("0", len(nonRepeatingPart)), 10, 64)
-	a, _ = strconv.ParseInt(nonRepeatingPart+repeatingPart, 10, 64)
+	b, _ = strconv.Atoi(strings.Repeat("9", len(repeatingPart)) + strings.Repeat("0", len(nonRepeatingPart)))
+	a, _ = strconv.Atoi(nonRepeatingPart + repeatingPart)
 	if nonRepeatingPart != "" {
-		v, _ := strconv.ParseInt(nonRepeatingPart, 10, 64)
+		v, _ := strconv.Atoi(nonRepeatingPart)
 		a -= v
 	}
 	a += intPartNum * b
@@ -600,7 +643,7 @@ func decimalToFraction(decimal string) (a, b int64) {
 }
 
 // 表达式计算（无括号）
-// LC227 https://leetcode-cn.com/problems/basic-calculator-ii/
+// LC227 https://leetcode.cn/problems/basic-calculator-ii/
 func calculate(s string) (ans int) {
 	s = strings.ReplaceAll(s, " ", "")
 	v, sign, stack := 0, '+', []int{}
@@ -647,7 +690,7 @@ func calculate(s string) (ans int) {
 // 对于一个填满的网格图，每个士兵到边缘的最短路径就是离他最近的边缘的距离
 // 当一个士兵退出网格后，BFS 地更新他周围的士兵到边缘的最短路径（空格点为 0，有人的格点为 1）
 // 复杂度 O((n+m)*min(n,m)^2)
-func minMustPassSum(n, m int, targetCells [][2]int, min func(int, int) int) int {
+func minMustPassSum(n, m int, targetCells [][2]int) int {
 	dis := make([][]int, n)
 	filled := make([][]int, n) // 格子是否有人
 	inQ := make([][]bool, n)
@@ -655,7 +698,7 @@ func minMustPassSum(n, m int, targetCells [][2]int, min func(int, int) int) int 
 		dis[i] = make([]int, m)
 		filled[i] = make([]int, m)
 		for j := range dis[i] {
-			dis[i][j] = min(min(i, n-1-i), min(j, m-1-j))
+			dis[i][j] = min(i, n-1-i, j, m-1-j)
 			filled[i][j] = 1
 		}
 		inQ[i] = make([]bool, m)
@@ -692,14 +735,32 @@ func minMustPassSum(n, m int, targetCells [][2]int, min func(int, int) int) int 
 }
 
 // 马走日从 (0,0) 到 (x,y) 所需最小步数
-// 无边界 LC1197 https://leetcode-cn.com/problems/minimum-knight-moves/
+// 无边界 LC1197 https://leetcode.cn/problems/minimum-knight-moves/
+// http://poj.org/problem?id=1915
 // 有边界+打印方案 https://www.acwing.com/problem/content/3527/
-func minKnightMoves(x, y int, abs func(int) int, max func(int, int) int) int {
+/*
+# https://leetcode.cn/problems/maximum-number-of-moves-to-kill-all-pawns/
+def minKnightMoves(self, x: int, y: int) -> int:
+   x, y = abs(x), abs(y)
+   x, y = min(x, y), max(x, y)  # swap
+   if x == 0 and y == 1:
+	   return 3
+   if x == y == 2:
+	   return 4
+   if y > 2 * x:
+	   x += (y - 2 * x + 1) // 4 * 2
+   return (x + y) // 3 + (x + y) % 3
+*/
+func minKnightMoves(x, y int, abs func(int) int) int {
+	// TODO 算法来源？
 	x, y = abs(x), abs(y)
+	if x == 2 && y == 2 {
+		return 4
+	}
 	if x+y == 1 {
 		return 3
 	}
-	ans := max(max((x+1)/2, (y+1)/2), (x+y+2)/3)
+	ans := max((x+1)/2, (y+1)/2, (x+y+2)/3)
 	ans += (ans ^ x ^ y) & 1
 	return ans
 }
@@ -761,7 +822,8 @@ func isCuboid(rect [][2]int) bool {
 // https://oi-wiki.org/misc/josephus/ 注意当 k 较小时，存在 O(klogn) 的做法
 // https://www.scirp.org/pdf/OJDM_2019101516120841.pdf Generalizations of the Feline and Texas Chainsaw Josephus Problems
 //
-// 相关题目 https://leetcode-cn.com/problems/find-the-winner-of-the-circular-game/
+// LCR187 https://leetcode.cn/problems/yuan-quan-zhong-zui-hou-sheng-xia-de-shu-zi-lcof/
+// LC1823 https://leetcode.cn/problems/find-the-winner-of-the-circular-game/
 // https://codeforces.com/gym/101955/problem/K
 func josephusProblem(n, k int) int {
 	cur := 0
@@ -775,7 +837,7 @@ func josephusProblem(n, k int) int {
 // 环形 https://www.luogu.com.cn/problem/P2512 https://www.luogu.com.cn/problem/P3051 https://www.luogu.com.cn/problem/P4016 UVa11300 https://onlinejudge.org/index.php?option=com_onlinejudge&Itemid=8&category=25&page=show_problem&problem=2275
 // 环形+打印方案 https://www.luogu.com.cn/problem/P2125
 // 二维环形 https://www.acwing.com/problem/content/107/
-func minMoveToAllSameInCircle(a []int, abs func(int) int) (ans int) { // int64
+func minMoveToAllSameInCircle(a []int, abs func(int) int) (ans int) {
 	n := len(a)
 	avg := 0
 	for _, v := range a {
@@ -790,7 +852,7 @@ func minMoveToAllSameInCircle(a []int, abs func(int) int) (ans int) { // int64
 	for i := 1; i < n; i++ {
 		sum[i] = sum[i-1] + a[i] - avg
 	}
-	sort.Ints(sum) // 也可以用快速选择求中位数
+	slices.Sort(sum) // 也可以用快速选择求中位数
 	mid := sum[n/2]
 	for _, v := range sum {
 		ans += abs(v - mid)
@@ -799,7 +861,7 @@ func minMoveToAllSameInCircle(a []int, abs func(int) int) (ans int) { // int64
 }
 
 // 表达式转表达式树
-// https://leetcode-cn.com/submissions/detail/186220993/
+// https://leetcode.cn/submissions/detail/186220993/
 func parseExpression(s string) {
 	s = strings.TrimSpace(s)
 	type node struct {
@@ -852,9 +914,9 @@ func parseExpression(s string) {
 // https://en.wikipedia.org/wiki/Champernowne_constant
 // https://oeis.org/A033307
 // 返回第 k 位数字
-// https://leetcode-cn.com/contest/espressif-2021/problems/fSghVj/
+// https://leetcode.cn/contest/espressif-2021/problems/fSghVj/
 func champernowneConstant(k int) int {
-	for i, p10 := 1, 10; ; i++ { // int64
+	for i, p10 := 1, 10; ; i++ {
 		if i*p10 > k {
 			return int(strconv.Itoa(k / i)[k%i] & 15)
 		}
@@ -863,10 +925,338 @@ func champernowneConstant(k int) int {
 	}
 }
 
-// 力扣见过多次了
+// 摩尔投票法求绝对众数（absolute mode, majority）
+// Boyer–Moore majority vote algorithm
+// https://en.wikipedia.org/wiki/Boyer%E2%80%93Moore_majority_vote_algorithm
+// LC169 https://leetcode.cn/problems/majority-element/
+// LC229 变形 https://leetcode.cn/problems/majority-element-ii/
+// LC2780 https://leetcode.cn/problems/minimum-index-of-a-valid-split/
+func majorityVote(a []int) (mode int) {
+	cnt := 0
+	for _, v := range a {
+		if cnt == 0 {
+			mode = v
+		}
+		if v == mode {
+			cnt++
+		} else {
+			cnt--
+		}
+	}
+	return
+}
+
+// 给出二维平面上的 n 个坐标点，以 (x,y) 为中心的十字最多能覆盖多少个点？
+// https://atcoder.jp/contests/abc176/tasks/abc176_e
+// 进阶：每个点有不同的点权 https://atcoder.jp/contests/abc298/tasks/abc298_f
+func maxCover(a [][3]int) (ans int) {
+	type pair struct{ r, c int }
+	grid := make(map[pair]int, len(a))
+	rowSum := map[int]int{}
+	colSum := map[int]int{}
+	for _, p := range a {
+		r, c, v := p[0], p[1], p[2]
+		grid[pair{r, c}] = v
+		rowSum[r] += v
+		colSum[c] += v
+	}
+
+	type cs struct{ c, s int }
+	colList := make([]cs, 0, len(colSum))
+	for x, s := range colSum {
+		colList = append(colList, cs{x, s})
+	}
+	sort.Slice(colList, func(i, j int) bool { return colList[i].s > colList[j].s })
+
+	for r, s := range rowSum {
+		for _, cs := range colList {
+			v, ok := grid[pair{r, cs.c}] // 每个点至多访问一次
+			if !ok {
+				ans = max(ans, s+cs.s)
+				break // 保证时间复杂度是 O(n) 的关键：colList 从大到小排序，后面的只会更小，无需遍历
+			}
+			ans = max(ans, s+cs.s-v)
+		}
+	}
+	return
+}
+
+// 至多 k 次操作，每次操作把一个数减一，目标是最小化数组最大值
+// 不能把 a[i] 改成负数
+// https://codeforces.com/problemset/problem/960/B
+func minMaxArray(a []int, k int) {
+	sort.Sort(sort.Reverse(sort.IntSlice(a)))
+	a = append(a, 0) // 哨兵
+
+	sum := 0
+	for i := 0; a[i] > 0; {
+		v := a[i]
+		for ; a[i] == v; i++ {
+			sum += v
+		}
+		if sum-k >= a[i]*i {
+			sum -= k
+			h, ex := sum/i, sum%i
+			// ex 个 h+1，i-ex 个 h，其余不变
+			for j := 0; j < ex; j++ {
+				a[j] = h + 1
+			}
+			for j := ex; j < i; j++ {
+				a[j] = h
+			}
+			return
+		}
+	}
+	// 全为 0
+	for i := range a {
+		a[i] = 0
+	}
+}
+
+// 将 "aa...abb...b" (a 个 'a' 和 b 个 'b') 中的 b 向左移动 k 次，得到的字典序最大的字符串是什么？
+func moveAB(a, b, k int) string {
+	if k > a*b { // 非法
+		return ""
+	}
+	const A, B = "a", "b"
+	lb, ex := k/a, k%a
+	if ex == 0 {
+		return strings.Repeat(B, lb) + strings.Repeat(A, a) + strings.Repeat(B, b-lb)
+	}
+	return strings.Repeat(B, lb) + strings.Repeat(A, a-ex) + B + strings.Repeat(A, ex) + strings.Repeat(B, b-1-lb)
+}
+
+// https://www.facebook.com/codingcompetitions/hacker-cup/2023/practice-round/problems/C
+func twoApplesADay(a []int) int {
+	n := len(a)
+	if n == 1 {
+		return 1
+	}
+
+	const low = 1
+	slices.Sort(a)
+o:
+	for _, sum := range []int{a[0] + a[n-2], a[0] + a[n-1], a[1] + a[n-1]} {
+		ans := low - 1
+		l, r := 0, n-1
+		for l < r {
+			if a[l]+a[r] == sum {
+				l++
+				r--
+				continue
+			}
+			if ans >= low {
+				continue o
+			}
+			if a[l]+a[r] < sum {
+				ans = sum - a[l]
+				l++
+			} else {
+				ans = sum - a[r]
+				r--
+			}
+			if ans < low {
+				continue o
+			}
+		}
+		if ans < low {
+			ans = sum - a[l]
+		}
+		if ans >= low {
+			return ans
+		}
+	}
+	return -1
+}
+
+// 只能交换相邻的相差为 1 的数字（也可以交换 0 和 9）
+// 输出最小字典序
+//
+// 设 a=s[0]，答案的首位只可能是 a-1 或 a（如果 a=9，那么可能和 0 互换；如果是 0，那么不需要互换，特判即可）
+// 能不能是 a-1 呢？判断第一个 a-1 左边是否只有 a 和 a-2
+// 然后讨论 a=s[1]，依此类推
+// 用 10 个队列存对应数字出现的下标，每次取队首判断即可
+// 时间复杂度 O(10n)：一次判断过程复杂度是 O(10)，一共有 n 次判断
+//
+// https://ac.nowcoder.com/acm/contest/65259/C
+// 不能交换 0 和 9 的版本见后
+func makeLexicographicallySmallestStringBySwappingAdjacentElements(s string, abs func(int) int) string {
+	n := len(s)
+	pos := [10][]int{}
+	for i, b := range s {
+		b -= '0'
+		pos[b] = append(pos[b], i)
+	}
+
+	check := func(b byte) bool {
+		if len(pos[b]) == 0 {
+			return false
+		}
+		for i := byte(0); i <= 9; i++ {
+			if i == b {
+				continue
+			}
+			d := abs(int(i) - int(b))
+			if d != 1 && d != 9 && len(pos[i]) > 0 && pos[i][0] < pos[b][0] {
+				return false
+			}
+		}
+		return true
+	}
+
+	ans := make([]byte, 0, n)
+	used := make([]bool, n+1)
+	for i := 0; i < n; {
+		b := s[i] - '0'
+		x := (b + 9) % 10 // b-1
+		y := (b + 1) % 10
+		if x > y {
+			x, y = y, x
+		}
+		if x < b && check(x) {
+			b = x
+		} else if y < b && check(y) {
+			b = y
+		}
+
+		ans = append(ans, '0'+b)
+		used[pos[b][0]] = true
+		pos[b] = pos[b][1:]
+
+		for used[i] {
+			i++
+		}
+	}
+	return string(ans)
+}
+
+// 不能交换 0 和 9 的版本
+func makeLexicographicallySmallestStringBySwappingAdjacentElements2(a []int) []int {
+	const mx = 9
+	pos := [mx + 1][]int{}
+	for i, v := range a {
+		pos[v] = append(pos[v], i)
+	}
+
+	check := func(v int) bool {
+		if len(pos[v]) == 0 {
+			return false
+		}
+		for i := 0; i <= mx; i++ {
+			if (i < v-1 || i > v+1) && len(pos[i]) > 0 && pos[i][0] < pos[v][0] {
+				return false
+			}
+		}
+		return true
+	}
+
+	n := len(a)
+	ans := make([]int, 0, n)
+	used := make([]bool, n+1)
+	for i := 0; i < n; {
+		v := a[i]
+		if v == 0 {
+			continue
+		}
+		if check(v - 1) { // 把 v-1 换过来
+			v--
+		}
+
+		ans = append(ans, v)
+		used[pos[v][0]] = true
+		pos[v] = pos[v][1:]
+
+		for used[i] {
+			i++
+		}
+	}
+	return ans
+}
+
+// 解析时分
+// - [1736. 替换隐藏数字得到的最晚时间](https://leetcode.cn/problems/latest-time-by-replacing-hidden-digits/) 1264
+// - [3114. 替换字符可以得到的最晚时间](https://leetcode.cn/problems/latest-time-you-can-obtain-after-replacing-characters/) 1291
+// - [2224. 转化时间需要的最少操作数](https://leetcode.cn/problems/minimum-number-of-operations-to-convert-time/) 1296
+// - [2933. 高访问员工](https://leetcode.cn/problems/high-access-employees/) 1537
+// 解析月日：LC2409 https://leetcode.cn/problems/count-days-spent-together/
 func parseTime(s string) (hour, minute, total int) {
 	hour = int(s[0]&15)*10 + int(s[1]&15)
 	minute = int(s[3]&15)*10 + int(s[4]&15)
 	total = hour*60 + minute
 	return
+}
+
+// 区间覆盖
+// 给定一些区间，从中选择尽量少的区间，覆盖一条指定线段 [s,t]。
+// 变形说法：从 i 可以跳到 [i,i+a[i]] 中的任意整点
+// 返回从 0 跳到 n-1 的最小跳跃次数
+// 如果无法到达 n-1，返回 -1
+// 注：对于复杂变形题，采用分组循环不易写错
+// - [45. 跳跃游戏 II](https://leetcode.cn/problems/jump-game-ii/)
+// - [1024. 视频拼接](https://leetcode.cn/problems/video-stitching/) 1746
+// - [1326. 灌溉花园的最少水龙头数目](https://leetcode.cn/problems/minimum-number-of-taps-to-open-to-water-a-garden/) 1885
+// 【图解】https://leetcode.cn/problems/minimum-number-of-taps-to-open-to-water-a-garden/solution/yi-zhang-tu-miao-dong-pythonjavacgo-by-e-wqry/
+// https://codeforces.com/problemset/problem/1630/C 2200 变形 
+// https://codeforces.com/problemset/problem/1066/B 1500 这题其实不算，但如果每个加热器的 r 不同，就是跳跃游戏 II 了
+func minJumpNumbers(a []int) (ans int) {
+	curR := 0 // 已建造的桥的右端点
+	nxtR := 0 // 下一座桥的右端点的最大值
+	// 这里没有遍历到 n-1，因为它已经是终点了
+	for i, d := range a[:len(a)-1] {
+		r := i + d
+		nxtR = max(nxtR, r)
+		if i == curR { // 到达已建造的桥的右端点
+			if i == nxtR { // 无论怎么造桥，都无法从 i 到 i+1
+				return -1
+			}
+			curR = nxtR // 建造下一座桥
+			ans++
+		}
+	}
+	return
+}
+
+// 区间合并
+// 合并 a 中所有重叠的闭区间（哪怕只有一个端点重叠，也算重叠）
+// 注意 [1,1] 和 [2,2] 不能合并成 [1,2]
+// 注：这种做法在变形题中容易写错，更加稳定的做法是差分数组
+// - [56. 合并区间](https://leetcode.cn/problems/merge-intervals/)
+// - [55. 跳跃游戏](https://leetcode.cn/problems/jump-game/)
+// - [763. 划分字母区间](https://leetcode.cn/problems/partition-labels/) 1443
+// - [3169. 无需开会的工作日](https://leetcode.cn/problems/count-days-without-meetings/) ~1500
+// - [2580. 统计将重叠区间合并成组的方案数](https://leetcode.cn/problems/count-ways-to-group-overlapping-ranges/) 1632
+// - [2963. 统计好分割方案的数目](https://leetcode.cn/problems/count-the-number-of-good-partitions/) 1985
+// - [2584. 分割数组使乘积互质](https://leetcode.cn/problems/split-the-array-to-make-coprime-products/) 2159
+// - [2655. 寻找最大长度的未覆盖区间](https://leetcode.cn/problems/find-maximal-uncovered-ranges/)（会员题）
+// 另见 common.go 中的「区间贪心」
+// https://codeforces.com/problemset/problem/1626/C 1700
+// - 倒序合并代码 https://codeforces.com/contest/1626/submission/211306494
+// https://codeforces.com/problemset/problem/1859/D 1800
+// https://codeforces.com/problemset/problem/1260/D 1900
+func mergeIntervals(a [][]int) [][]int {
+	slices.SortFunc(a, func(a, b []int) int { return a[0] - b[0] }) // 按区间左端点排序
+	merged := [][]int{}
+	l0 := a[0][0]
+	maxR := a[0][1]
+	for _, p := range a[1:] { // 从第二个区间开始
+		l, r := p[0], p[1]
+		// 如果要合并 [1,1] 和 [2,2]，下面改成 if l-1 > maxR
+		if l > maxR { // 发现一个新区间
+			merged = append(merged, []int{l0, maxR}) // 先把旧的加入答案
+			l0 = l                                   // 记录新区间左端点
+		}
+		maxR = max(maxR, r)
+	}
+	merged = append(merged, []int{l0, maxR}) // 最后发现的新区间加入答案
+
+	{
+		// 包含 x 的闭区间
+		var x int
+		i := sort.Search(len(merged), func(i int) bool { return merged[i][1] >= x })
+		if i < len(merged) && merged[i][0] <= x {
+			// ans[i]...
+		}
+	}
+
+	return merged
 }

@@ -12,14 +12,13 @@ import (
 	"testing"
 )
 
-//func init() { rand.Seed(time.Now().UnixNano()) }
-
 func TestCompareInf(_t *testing.T) {
+	//return
 	testutil.DebugTLE = 0
-
+	rg := testutil2.NewRandGenerator()
 	inputGenerator := func() (a []int) {
 		//return
-		rg := testutil2.NewRandGenerator()
+		rg.Clear()
 		n := rg.Int(1, 3)
 		a = rg.IntSlice(n, 1, 3)
 		return
@@ -47,12 +46,13 @@ func (Foo) F(int) (_ int)     { return }
 func (Foo) G(int) (_ int)     { return }
 
 func TestCompareClassInf(_t *testing.T) {
+	//return
 	testutil.DebugTLE = 0
-
 	assert := assert.New(_t)
+	rg := testutil2.NewRandGenerator()
 	for tc := 1; ; tc++ {
 		inputInfo := &strings.Builder{}
-		rg := testutil2.NewRandGenerator()
+		rg.Clear()
 		n := rg.Int(1, 5)
 		m := rg.Int(1, 5)
 		inputInfo.WriteString(fmt.Sprintln("Constructor", n)) //
@@ -92,8 +92,9 @@ func TestCompareClassInf(_t *testing.T) {
 
 func TestCheckInf(_t *testing.T) {
 	var solve func([]int) []int /*TODO*/
+	rg := testutil2.NewRandGenerator()
 	for tc := 1; ; tc++ {
-		rg := testutil2.NewRandGenerator()
+		rg.Clear()
 		n := rg.Int(1, 9)
 		a := rg.IntSlice(n, 1, 9)
 		myAns := solve(a)

@@ -1,12 +1,11 @@
 package copypasta
 
 import (
-	. "fmt"
+	"fmt"
 	"io"
 	"math"
 	"math/rand"
 	"sort"
-	"time"
 )
 
 /*
@@ -14,42 +13,48 @@ https://oi-wiki.org/geometry/2d/
 https://oi-wiki.org/geometry/3d/
 推荐 https://vlecomte.github.io/cp-geo.pdf
 https://www.cnblogs.com/Xing-Ling/p/12102489.html
-todo kuangbin 的计算几何模板 https://kuangbin.github.io/2019/04/28/20190428/
+jiangly https://ac.nowcoder.com/acm/contest/view-submission?submissionId=62808640
+kuangbin https://kuangbin.github.io/2019/04/28/20190428/
 
-由于浮点默认是 %g，输出时应使用 Fprintf(out, "%.16f", ans)，这样还可以方便测试
+由于浮点数默认是以 %g 输出，正确写法是 Fprintf(out, "%.15f", ans)，这样还可以方便测试
 
-always add `eps` when do printf rounding:
+NOTE: always add `eps` when do printf rounding
 Sprintf("%.1f", 0.25) == "0.2"
 Sprintf("%.1f", 0.25+eps) == "0.3"
 
-比较小浮点数，采用绝对误差：
+比较小浮点数，采用绝对误差
 a < b    a+eps < b
 a <= b   a-eps < b
 a == b   math.Abs(a-b) < eps
 
-比较大浮点数，采用相对误差（因为是即使 a 和 b 相近，a-b 的误差也可能大于 eps，见 CF1059D）：
+比较大浮点数，采用相对误差（因为是即使 a 和 b 相近，a-b 的误差也可能大于 eps，见 CF1059D）
 a < b    a*(1+eps) < b
 a <= b   a*(1-eps) < b
 a == b   a*(1-eps) < b && b < a*(1+eps)
 
+计算几何第一课：如何避免卡精度？如何设置合理的精度？
 避免不同数量级的浮点数的加减可以减小误差
 见下面这两份代码的区别
 https://codeforces.com/problemset/submission/621/116068024
 https://codeforces.com/problemset/submission/621/116068186
+调精度 https://codeforces.com/contest/1826/problem/F
 
 dot (dot product，数量积，点积，内积)
 https://en.wikipedia.org/wiki/Dot_product
 https://en.wikipedia.org/wiki/Inner_product_space
 中学课本是用力的做功引入数量积的（物体在力 F 的作用下产生位移 s，力 F 所做的功等于 |F||s|cosθ）
-据此课本上定义 A·B = |A||B|cosθ，然后证明了其等于 x1x2+y1y2
+据此课本上定义 a·b = |a||b|cosθ，然后证明了其等于 x1x2+y1y2
+注意当 π/2<θ<π 时，上式是负数，可以用来判断两个向量是同向还是异向
 
-det (determinant，行列式，叉积的模，有向面积)
+det (determinant，行列式，平行四边形的有向面积，二维向量叉积的 z 分量的值)
 https://en.wikipedia.org/wiki/Determinant#Geometric_meaning
-|A||B|sinθ
-+ b在a左侧
-- b在a右侧
-0 ab平行或重合（共基线）
+a×b 的 z 分量的值 = |a||b|sinθ = x1y2-y1x2，其中 θ 是 a 到 b 的夹角
+考虑 x1y2-y1x2 的值：
+正：b 在 a 左侧
+负：b 在 a 右侧
+零：a 和 b 平行或重合（共基线）
 关于有向面积 https://cp-algorithms.com/geometry/oriented-triangle-area.html
+https://codeforces.com/gym/105139/problem/B
 
 1° = (π/180)rad
 1rad = (180/π)°
@@ -76,7 +81,8 @@ Acos(-1) = π
 (-1, 0) = π
 ( 0, 0) = 0   建议特殊处理
 
-todo 二维偏序 https://ac.nowcoder.com/acm/contest/4853/F 题解 https://ac.nowcoder.com/discuss/394080
+todo 二维偏序 https://ac.nowcoder.com/acm/contest/4853/F
+- 题解 https://ac.nowcoder.com/discuss/394080
 
 Pick 定理
 https://en.wikipedia.org/wiki/Pick%27s_theorem
@@ -88,17 +94,39 @@ A=i+b/2-1, A为多边形面积，i为内部格点数，b为边上格点数
 https://codeforces.com/problemset/problem/1548/D1
 https://codeforces.com/problemset/problem/1548/D2
 
-TIPS: 旋转坐标，适用于基于曼哈顿距离的题目
-      顺时针旋转 45° (x,y) -> (x+y,y-x) 记作 (x',y')
-      曼哈顿距离 |x1-x2|+|y1-y2| = max(|x1'-x2'|,|y1'-y2'|)
-TIPS: 另一种处理曼哈顿距离的方法是分四种情况讨论，即
-      |a-b|+|c-d|
-      = max(a-b, b-a) + max(c-d, d-c)
-      = max((a-b)+(c-d), (b-a)+(c-d), (a-b)+(d-c), (b-a)+(d-c))
-      另外一种思路见 https://leetcode.com/problems/reverse-subarray-to-maximize-array-value/discuss/489882/O(n)-Solution-with-explanation
-      LC1330 https://leetcode-cn.com/problems/reverse-subarray-to-maximize-array-value/
-      todo 上面这题求最小 https://atcoder.jp/contests/arc119/tasks/arc119_e
-      LC1131 https://leetcode-cn.com/problems/maximum-of-absolute-value-expression/
+曼哈顿距离
+TIPS: 旋转坐标
+【图解】https://leetcode.cn/problems/minimize-manhattan-distances/solution/tu-jie-man-ha-dun-ju-chi-heng-deng-shi-b-op84/
+顺时针旋转 45° (x,y) -> (x+y,y-x) 记作 (x',y')
+曼哈顿距离转成切比雪夫距离（棋盘距离） |x1-x2|+|y1-y2| = max(|x1'-x2'|,|y1'-y2'|)
+模板题 https://atcoder.jp/contests/abc178/tasks/abc178_e
+LC3102 https://leetcode.cn/problems/minimize-manhattan-distances/ 2216
+https://codeforces.com/problemset/problem/1689/D 1900
+https://codeforces.com/problemset/problem/1979/E 2400
+https://www.luogu.com.cn/problem/P5098
+todo LC1956 https://leetcode.cn/problems/minimum-time-for-k-virus-variants-to-spread/
+点到点集的最大曼哈顿距离 https://codeforces.com/problemset/problem/491/B
+更多维数 https://codeforces.com/problemset/problem/1093/G
+- http://poj.org/problem?id=2926
+LC1131 三维 https://leetcode.cn/problems/maximum-of-absolute-value-expression/
+反向：切比雪夫距离转成曼哈顿距离 https://www.luogu.com.cn/problem/P3964
+- 逆时针旋转 45° (x,y) -> ((x-y)/2, (x+y)/2)
+- 切比雪夫距离的等价表述：一个点到周围八方向的相邻点的距离都是 1
+https://atcoder.jp/contests/abc351/tasks/abc351_e
+
+TIPS: 另一种方法是分四种情况讨论，即
+|a-b|+|c-d|
+= max(a-b, b-a) + max(c-d, d-c)
+= max((a-b)+(c-d), (b-a)+(c-d), (a-b)+(d-c), (b-a)+(d-c))
+https://leetcode.com/problems/reverse-subarray-to-maximize-array-value/discuss/489882/O(n)-Solution-with-explanation
+纯数学证明 https://leetcode.cn/problems/reverse-subarray-to-maximize-array-value/solution/bu-hui-hua-jian-qing-kan-zhe-pythonjavac-c2s6/
+LC1330 https://leetcode.cn/problems/reverse-subarray-to-maximize-array-value/
+- todo 上面这题求最小 https://atcoder.jp/contests/arc119/tasks/arc119_e
+- https://codeforces.com/problemset/problem/1898/D
+LC1131 三维 https://leetcode.cn/problems/maximum-of-absolute-value-expression/
+
+曼哈顿最近点对
+LC2613 https://leetcode.cn/problems/beautiful-pairs/
 
 https://oeis.org/A053411 Circle numbers
 a(n)= number of points (i,j), i,j integers, contained in a circle of diameter n, centered at the origin
@@ -107,44 +135,53 @@ https://oeis.org/A136485 Number of unit square lattice cells enclosed by origin 
 
 湖边野猫追捕水中老鼠，为什么速度比低于 4.6033 就逮不到老鼠？ https://zhuanlan.zhihu.com/p/113905393
 
+为什么常见的O(n)时间的找凸多边形内最大内接三角形的那个算法是错误的? https://www.zhihu.com/question/60726749
+
 */
 
-// 返回 floor(sqrt(x))
-// 由于 float64 无法表示过大的 int64 数（比如 1e18 大小的），需要上下调整一番
-// 具体见 https://atcoder.jp/contests/abc191/tasks/abc191_d 和 https://codeforces.com/problemset/problem/1036/F
-func floorSqrt(x int64) int64 {
-	if x == 0 {
-		return 0
+// isqrt 返回 floor(sqrt(x))
+// 函数名来自 Python 中的 math.isqrt
+// 由于 float64 无法【精确】表示过大的 int（超出 2^53-1 的），需要微调   
+// 注：【精确】指代码中的 float64 必须要对应着唯一的 int，才能保证计算结果正确 https://www.zhihu.com/question/29010688
+//
+// 举例说明（上舍入错误）
+// x                  floor(sqrt(x)) 注意这里算的是错误的结果，需要用 if 调整，见下面代码
+// 999999999999999999 1000000000
+// 999996000003999999 999998000
+// 880200476099999999 938190000
+//
+// 附：https://www.binaryconvert.com/convert_double.html
+// 0b1(Mantissa) * 2 ** (0b(Exponent) - 1075)
+//
+// 可以用以下题目测试：
+// https://atcoder.jp/contests/abc191/tasks/abc191_d 
+// https://atcoder.jp/contests/abc243/tasks/abc243_g
+// https://codeforces.com/problemset/problem/1036/F
+// https://codeforces.com/problemset/problem/1862/D
+func isqrt(x int) int {
+	rt := int(math.Sqrt(float64(x))) // 可能会算多一点点
+	if rt*rt > x {
+		rt--
 	}
-	res := int64(math.Sqrt(float64(x)))
-	if res*res > x {
-		res--
-	} else if (res+1)*(res+1) <= x { //（这种情况似乎不需要判断）
-		res++
-	}
-	return res
+	return rt
+}
+
+// isSQ 返回 x 是否为完全平方数
+func isSQ(x int) bool {
+	rt := isqrt(x)
+	return rt*rt == x
 }
 
 // 返回 floor(pow(x, 1/n))
 // x>=0, n>1
-func floorRootN(x int64, n int) int64 {
+func floorRootN(x, n int) int {
 	if x == 0 {
 		return 0
 	}
 	if n > 62 {
 		return 1
 	}
-	res := int64(math.Pow(float64(x), 1/float64(n)))
-	pow := func(x int64, n int) (res int64) {
-		res = 1
-		for ; n > 0; n >>= 1 {
-			if n&1 == 1 {
-				res = res * x
-			}
-			x = x * x
-		}
-		return
-	}
+	res := int(math.Pow(float64(x), 1/float64(n)))
 	// 误差修正
 	if pow(res, n) > x {
 		res--
@@ -154,47 +191,88 @@ func floorRootN(x int64, n int) int64 {
 	return res
 }
 
-const eps = 1e-8
+// 什么时候 (i-1)/i == (i-2)/(i-1) ?
+// 最小的正整数 i 是一个比 1e8 略小的数，比 floor(2^(53/2)) = 94906265 略大一点
+// 94911151
+// 94917164
+// 94920884
+// 94923833
+// 94926354
+// 94928593
+// 94930626
+// 94932503
+// 94934254
+// 94935901
+// 为什么？如果两个数的差小于 2^-52，就可能会 round 到同一个浮点数上
+// LC2280 https://leetcode.cn/problems/minimum-lines-to-represent-a-line-chart/
+//
+// 附：i=134229312 和 i=134229313 这两个相邻的数都满足，这是最小的同时满足且相邻的数字
+//
+// 附：最大的几个负数，比 -2^(52/2) = -67108864 略小一点
+// -67114657
+// -67118898
+// -67121818
+// -67124192
+// -67126245
+func roundErrorExample() {
+	cnt := 0
+	for i := 10; cnt < 10; i++ {
+		if float64(i-1)/float64(i) == float64(i)/float64(i+1) {
+			fmt.Println(i)
+			cnt++
+		}
+	}
+}
 
 // 浮点数 GCD
-// https://codeforces.com/problemset/problem/1/C
+// https://codeforces.com/problemset/problem/1/C 2100
 func gcdf(a, b float64) float64 {
 	// 注意根据题目约束，分析 eps 取值
 	// 例如 CF1C，由于保证正多边形边数不超过 100，故 gcdf 的结果不会小于 2*math.Pi/100，eps 可以取 1e-2
-	for a > eps { // math.Abs(a) > eps
+	for a > eps { // 如果有负数，改成 math.Abs(a) > eps
 		a, b = math.Mod(b, a), a
 	}
 	return b
 }
 
-/* 二维向量（点）*/
-type vec struct{ x, y int64 }
+const eps = 1e-8
 
-func (a vec) add(b vec) vec     { return vec{a.x + b.x, a.y + b.y} }
-func (a vec) sub(b vec) vec     { return vec{a.x - b.x, a.y - b.y} }
-func (a vec) dot(b vec) int64   { return a.x*b.x + a.y*b.y }
-func (a vec) det(b vec) int64   { return a.x*b.y - a.y*b.x }
-func (a vec) len2() int64       { return a.x*a.x + a.y*a.y }
-func (a vec) dis2(b vec) int64  { return a.sub(b).len2() }
-func (a vec) len() float64      { return math.Sqrt(float64(a.x*a.x + a.y*a.y)) }
-func (a vec) dis(b vec) float64 { return a.sub(b).len() }
-func (a vec) vecF() vecF        { return vecF{float64(a.x), float64(a.y)} }
+/*
+二维向量（点）
+点与点
+*/
+type vec struct{ x, y int }
 
-func (a *vec) adds(b vec) { a.x += b.x; a.y += b.y }
-func (a *vec) subs(b vec) { a.x -= b.x; a.y -= b.y }
+func (a vec) add(b vec) vec       { return vec{a.x + b.x, a.y + b.y} }
+func (a vec) sub(b vec) vec       { return vec{a.x - b.x, a.y - b.y} }
+func (a vec) dot(b vec) int       { return a.x*b.x + a.y*b.y }
+func (a vec) det(b vec) int       { return a.x*b.y - a.y*b.x } // cross
+func (a vec) len2() int           { return a.x*a.x + a.y*a.y }
+func (a vec) dis2(b vec) int      { return a.sub(b).len2() }
+func (a vec) len() float64        { return math.Sqrt(float64(a.x*a.x + a.y*a.y)) }
+func (a vec) dis(b vec) float64   { return a.sub(b).len() }
+func (a vec) vecF() vecF          { return vecF{float64(a.x), float64(a.y)} }
+func (a vec) mul(k int) vec       { return vec{a.x * k, a.y * k} }
+func (a vecF) div(k float64) vecF { return vecF{a.x / k, a.y / k} }
 
-// 不常用
+func (a *vec) adds(b vec)         { a.x += b.x; a.y += b.y }
+func (a *vec) subs(b vec)         { a.x -= b.x; a.y -= b.y }
+func (a *vec) muls(k int)         { a.x *= k; a.y *= k }
+func (a *vecF) divs(k float64)    { a.x /= k; a.y /= k }
+
 func (a vec) less(b vec) bool     { return a.x < b.x || a.x == b.x && a.y < b.y }
 func (a vecF) less(b vecF) bool   { return a.x+eps < b.x || a.x < b.x+eps && a.y+eps < b.y }
 func (a vecF) equals(b vecF) bool { return math.Abs(a.x-b.x) < eps && math.Abs(a.y-b.y) < eps }
 func (a vec) parallel(b vec) bool { return a.det(b) == 0 }
-func (a vec) mul(k int64) vec     { return vec{a.x * k, a.y * k} }
-func (a *vec) muls(k int64)       { a.x *= k; a.y *= k }
-func (a vecF) div(k float64) vecF { return vecF{a.x / k, a.y / k} }
-func (a *vecF) divs(k float64)    { a.x /= k; a.y /= k }
 func (a vec) mulVec(b vec) vec    { return vec{a.x*b.x - a.y*b.y, a.x*b.y + b.x*a.y} }
 func (a vec) polarAngle() float64 { return math.Atan2(float64(a.y), float64(a.x)) }
 func (a vec) reverse() vec        { return vec{-a.x, -a.y} }
+func (a vec) sign() int {
+	if a.y < 0 || a.y == 0 && a.x < 0 {
+		return -1
+	}
+	return 1
+}
 func (a vec) up() vec {
 	if a.y < 0 || a.y == 0 && a.x < 0 {
 		return a.reverse()
@@ -233,6 +311,8 @@ func (a vec) angleTo(b vec) float64 { return math.Atan2(float64(a.det(b)), float
 // - 考虑补集
 // - 点和原点连直线，在直线一侧选两个点组成的三角形必然不会包含原点
 // - 双指针维护
+// 从 n 个向量中选出一些向量，使得向量和的模长最大 https://atcoder.jp/contests/abc139/tasks/abc139_f
+// https://codeforces.com/contest/1841/problem/F
 func polarAngleSort(ps []vec) {
 	// (-π, π]
 	// (-1e9,-1) -> (-1e9, 0)
@@ -261,10 +341,10 @@ func cosineRuleVec(va, vb vecF, angle float64) float64 {
 func circumcenter(a, b, c vecF) vecF {
 	a1, b1, a2, b2 := b.x-a.x, b.y-a.y, c.x-a.x, c.y-a.y
 	c1, c2, d := a1*a1+b1*b1, a2*a2+b2*b2, 2*(a1*b2-a2*b1)
-	if math.Abs(d) < eps {
-		// 根据题目特判三点共线的情况
+	if math.Abs(d) < eps { // 三点共线（需要根据题目要求特判）
+		return vecF{math.NaN(), math.NaN()}
 	}
-	// 注：可以打开括号，先 /d 再做乘法，提高精度
+	// 也可以打开括号，先 /d 再做乘法，提高精度
 	return vecF{a.x + (c1*b2-c2*b1)/d, a.y + (a1*c2-a2*c1)/d}
 }
 
@@ -298,7 +378,10 @@ func incenter(a, b, c vecF) vecF {
 	return vecF{(bc*a.x + ac*b.x + ab*c.x) / sum, (bc*a.y + ac*b.y + ab*c.y) / sum}
 }
 
-/* 二维直线（线段）*/
+/*
+二维直线（线段）
+二维点与线、线与线
+*/
 type line struct{ p1, p2 vec }
 
 // 方向向量 directional vector
@@ -320,7 +403,11 @@ func (a vec) onLine(l line) bool {
 func (a vec) onSeg(l line) bool {
 	p1, p2 := l.p1.sub(a), l.p2.sub(a)
 	return p1.det(p2) == 0 && p1.dot(p2) <= 0 // 含端点
-	//return math.Abs(p1.det(p2)) < eps && p1.dot(p2) < eps
+}
+
+func (a vecF) onSegF(l lineF) bool {
+	p1, p2 := l.p1.sub(a), l.p2.sub(a)
+	return math.Abs(p1.det(p2)) < eps && p1.dot(p2) < eps // 含端点
 }
 
 // 点 a 是否在射线 o-d 上（d 是向量）
@@ -353,7 +440,7 @@ func (a vecF) disToSeg(l lineF) float64 {
 }
 
 // 判断点 a 到线段 l 的距离 <= r，避免浮点运算
-func (a vec) withinRange(l line, r int64) bool {
+func (a vec) withinRange(l line, r int) bool {
 	v, p1a, p2a := l.vec(), a.sub(l.p1), a.sub(l.p2)
 	if v.dot(p1a) <= 0 {
 		return p1a.len2() <= r*r
@@ -365,6 +452,7 @@ func (a vec) withinRange(l line, r int64) bool {
 }
 
 // 点 a 在直线 l 上的投影
+// https://codeforces.com/contest/1826/problem/F
 func (a vecF) projection(l lineF) vecF {
 	v, p1a := l.vec(), a.sub(l.p1)
 	t := v.dot(p1a) / v.len2()
@@ -377,7 +465,7 @@ func (a vecF) symmetry(l lineF) vecF {
 	return a.add(a.projection(l).sub(a).mul(2))
 }
 
-// 判断点 a 是否在以线段 l 为对角线的矩形内（矩形与坐标轴平行）
+// 判断点 a 是否在以线段 l 为对角线的矩形内（矩形边界与坐标轴平行）
 func (a vec) inRect(l line) bool {
 	return (a.x >= l.p1.x || a.x >= l.p2.x) &&
 		(a.x <= l.p1.x || a.x <= l.p2.x) &&
@@ -390,22 +478,30 @@ func (a vec) inRect(l line) bool {
 // NOTE: 若输入均为有理数，则输出也为有理数，对精度要求较高时可使用分数类
 func (a lineF) intersection(b lineF) vecF {
 	va, vb, u := a.vec(), b.vec(), a.p1.sub(b.p1)
-	t := vb.det(u) / va.det(vb) // 需保证 a b 不能平行，即 va.det(vb) != 0
+	d := va.det(vb)
+	if math.Abs(d) < eps { // 两直线平行（特判）
+		return vecF{math.NaN(), math.NaN()}
+	}
+	t := vb.det(u) / d
 	return a.point(t)
 }
 
 // 直线 a b 交点 - 两点式
 // 线段求整数交点 https://codeforces.com/problemset/problem/1036/E
-// https://leetcode-cn.com/problems/intersection-lcci/
+// 相关 https://leetcode.cn/problems/intersection-lcci/
 func (a lineF) intersection2(b lineF) vecF {
 	va := a.vec()
 	d1 := va.det(b.p1.sub(a.p1))
 	d2 := va.det(b.p2.sub(a.p1))
-	return vecF{b.p1.x*d2 - b.p2.x*d1, b.p1.y*d2 - b.p2.y*d1}.div(d2 - d1) // 需保证 a b 不能平行，即 d1 != d2
+	if math.Abs(d1-d2) < eps { // 两直线平行（特判）
+		return vecF{math.NaN(), math.NaN()}
+	}
+	return vecF{b.p1.x*d2 - b.p2.x*d1, b.p1.y*d2 - b.p2.y*d1}.div(d2 - d1)
 }
 
-// 求射线 a b 交点，返回各自到首个交点所需的时间（射线速度由 .vec().len() 决定）
-// 无交点返回 -1
+// 射线 a b 交点 c
+// 返回 a b 各自到首个交点所需的时间（射线速度由 .vec().len() 决定）
+// 无交点时返回 -1
 // 交点为 a.point(ta) 或 b.point(tb)
 // 若题目给了方向向量和速度：https://codeforces.com/problemset/problem/1359/F
 func (a lineF) rayIntersection(b lineF) (ta, tb float64) {
@@ -434,31 +530,76 @@ func (a lineF) rayIntersection(b lineF) (ta, tb float64) {
 	}
 }
 
-// 线段规范相交
-// CCW (counterclockwise)
-func (a lineF) segProperIntersection(b lineF) bool {
-	sign := func(x float64) int {
-		if x < -eps {
-			return -1
-		}
-		if x < eps {
-			return 0
-		}
-		return 1
+// segIntersection 返回线段 a 和 b 的相交状态 state，以及交点
+// 如果有无穷个交点，返回其中 x 最小的交点（垂线取 y 最小）left 和 x 最大的交点（垂线取 y 最大）right
+// 0：不相交
+// 1：规范相交（交点不是线段端点）
+// 2：在端点相交
+// 3：重合（有无穷个交点）
+// 面试题 16.03. 交点 https://leetcode.cn/problems/intersection-lcci/
+// https://leetcode.cn/contest/autox2023/problems/TcdlJS/
+func (a lineF) segIntersection(b lineF) (state int, left, right vecF) {
+	if max(a.p1.x, a.p2.x) < min(b.p1.x, b.p2.x) ||
+		min(a.p1.x, a.p2.x) > max(b.p1.x, b.p2.x) ||
+		max(a.p1.y, a.p2.y) < min(b.p1.y, b.p2.y) ||
+		min(a.p1.y, a.p2.y) > max(b.p1.y, b.p2.y) {
+		return // 不相交（两条线段的矩形框不相交）
 	}
+
 	va, vb := a.vec(), b.vec()
-	d1, d2 := va.det(b.p1.sub(a.p1)), va.det(b.p2.sub(a.p1))
-	d3, d4 := vb.det(a.p1.sub(b.p1)), vb.det(a.p2.sub(b.p1))
-	return sign(d1)*sign(d2) < 0 && sign(d3)*sign(d4) < 0
+	if va.det(vb) == 0 { // 平行
+		if va.det(b.p1.sub(a.p1)) != 0 {
+			return // 不相交（两条线段不在同一条基线上）
+		}
+		minAx, maxAx := min(a.p1.x, a.p2.x), max(a.p1.x, a.p2.x)
+		minAy, maxAy := min(a.p1.y, a.p2.y), max(a.p1.y, a.p2.y)
+		minBx, maxBx := min(b.p1.x, b.p2.x), max(b.p1.x, b.p2.x)
+		minBy, maxBy := min(b.p1.y, b.p2.y), max(b.p1.y, b.p2.y)
+		left = vecF{max(minAx, minBx), max(minAy, minBy)}
+		right = vecF{min(maxAx, maxBx), min(maxAy, maxBy)}
+		if left == right {
+			return 2, left, left // 在端点相交
+		}
+		//if !left.onSegF(a) {
+		//	left.y, right.y = right.y, left.y
+		//}
+		return 3, left, right // 有无穷个交点
+	}
+
+	//d1, d2 := va.det(b.p1.sub(a.p1)), va.det(b.p2.sub(a.p1))
+	//d3, d4 := vb.det(a.p1.sub(b.p1)), vb.det(a.p2.sub(b.p1))
+	//if sign(d1)*sign(d2) < 0 && sign(d3)*sign(d4) < 0 { return 1 }
+	d1 := b.p1.sub(a.p1).det(b.p2.sub(a.p1))
+	d2 := b.p1.sub(a.p2).det(b.p2.sub(a.p2))
+	if d1 > 0 && d2 > 0 || d1 < 0 && d2 < 0 {
+		return // 不相交
+	}
+	d3 := a.p1.sub(b.p1).det(a.p2.sub(b.p1))
+	d4 := a.p1.sub(b.p2).det(a.p2.sub(b.p2))
+	if d3 > 0 && d4 > 0 || d3 < 0 && d4 < 0 {
+		return // 不相交
+	}
+
+	p := a.intersection(b)
+	if d1 == 0 || d2 == 0 || d3 == 0 || d4 == 0 {
+		return 2, p, p // 在端点相交
+	}
+	return 1, p, p // 规范相交
 }
 
 // 过点 a 的垂直于 l 的直线
-func (a vec) perpendicular(l line) line { return line{a, a.add(vec{l.p1.y - l.p2.y, l.p2.x - l.p1.x})} }
+func (a vec) perpendicular(l line) line {
+	return line{a, a.add(vec{l.p1.y - l.p2.y, l.p2.x - l.p1.x})}
+}
 
-/* 圆 */
+/*
+圆
+线与圆
+圆与圆
+*/
 type circle struct {
 	vec
-	r int64
+	r int
 }
 
 // 圆心角对应的点
@@ -473,11 +614,11 @@ func (o circleF) point(rad float64) vecF {
 // 用三角形外心求解，见 circumcenter
 
 // 给定半径和一条有向的弦，求该弦右侧的圆心（即 ao 在 ab 右侧）
-func getCircleCenter(a, b vec, r int64) vecF {
+func getCircleCenter(a, b vec, r int) vecF {
 	disAB2 := b.sub(a).len2()
-	//if disAB2 > 4*r*r {
-	//	continue
-	//}
+	if disAB2 > 4*r*r { // 不存在
+		return vecF{math.NaN(), math.NaN()}
+	}
 	midX, midY := float64(a.x+b.x)/2, float64(a.y+b.y)/2
 	d := math.Sqrt(float64(r*r) - float64(disAB2/4))
 	angle := math.Atan2(float64(b.y-a.y), float64(b.x-a.x))
@@ -486,7 +627,10 @@ func getCircleCenter(a, b vec, r int64) vecF {
 
 // 直线与圆的交点
 // t1 <= t2
-// 射线的情况见 https://www.acwing.com/problem/content/4502/
+// 射线是否相交：t2 >= 0
+// - https://www.acwing.com/problem/content/4502/
+// 线段与圆是否相交：0 <= t1, t2 <= 1
+// - https://leetcode.cn/contest/autox2023/problems/TcdlJS/
 func (o circleF) intersectionLine(l lineF) (ps []vecF, t1, t2 float64) {
 	v := l.vec()
 	// 需要保证 v 不会退化成一个点
@@ -521,9 +665,10 @@ func (o circle) intersectionCircle(b circle) (ps []vecF, normal bool) {
 	dab2 := ab.len2()
 	diffR, sumR := a.r-b.r, a.r+b.r
 	if dab2 == 0 {
+		// 重合
 		if diffR == 0 {
 			return
-		} // 重合
+		}
 		return nil, true
 	}
 	normal = true
@@ -550,7 +695,7 @@ func (o circle) intersectionCircle(b circle) (ps []vecF, normal bool) {
 
 // 圆的面积并 - 两圆的特殊情形
 // 两圆面积交 = 面积和 - 面积并
-// todo https://codeforces.com/contest/600/problem/D
+// todo https://codeforces.com/problemset/problem/600/D
 
 // 圆的面积并
 // todo
@@ -571,7 +716,7 @@ func (o circle) tangents(p vec) (ls []vecF) {
 
 // 两圆公切线
 // 返回每条切线在圆 o 和圆 ob 的切点
-// NOTE: 下面的代码是基于 int64 的，没有判断 eps
+// NOTE: 下面的代码是基于 int 的，没有判断 eps
 func (o circle) tangents2(b circle) (ls []lineF, hasInf bool) {
 	a := o
 	if a.r < b.r {
@@ -610,10 +755,12 @@ func (o circle) tangents2(b circle) (ls []lineF, hasInf bool) {
 // 详见《计算几何：算法与应用（第 3 版）》第 4.7 节
 // https://en.wikipedia.org/wiki/Smallest-circle_problem
 // https://oi-wiki.org/geometry/random-incremental/
-// 模板题 https://www.luogu.com.cn/problem/P1742 https://www.acwing.com/problem/content/3031/ https://www.luogu.com.cn/problem/P2533 LC1924 https://leetcode-cn.com/problems/erect-the-fence-ii/
-// 椭圆（坐标系旋转缩一下） https://www.luogu.com.cn/problem/P4288 https://www.acwing.com/problem/content/2787/
+// 模板题 https://www.luogu.com.cn/problem/P1742 
+//       https://www.luogu.com.cn/problem/P2533
+//       https://atcoder.jp/contests/abc151/tasks/abc151_f
+//       LC1924 https://leetcode.cn/problems/erect-the-fence-ii/
+// 椭圆（坐标系旋转缩一下） https://www.luogu.com.cn/problem/P4288
 func smallestEnclosingDisc(ps []vecF) circleF {
-	rand.Seed(time.Now().UnixNano())
 	rand.Shuffle(len(ps), func(i, j int) { ps[i], ps[j] = ps[j], ps[i] })
 	o := ps[0]
 	r2 := 0.
@@ -642,8 +789,8 @@ func smallestEnclosingDisc(ps []vecF) circleF {
 // 求一固定半径的圆最多能覆盖多少个点（圆边上也算覆盖） len(ps)>0 && r>0
 // Angular Sweep 算法 O(n^2logn)
 // https://www.geeksforgeeks.org/angular-sweep-maximum-points-can-enclosed-circle-given-radius/
-// LC1453 https://leetcode-cn.com/problems/maximum-number-of-darts-inside-of-a-circular-dartboard/solution/python3-angular-sweepsuan-fa-by-lih/
-func maxCoveredPoints(ps []vec, r int64, max func(int, int) int) int {
+// LC1453 https://leetcode.cn/problems/maximum-number-of-darts-inside-of-a-circular-dartboard/solution/python3-angular-sweepsuan-fa-by-lih/
+func maxCoveredPoints(ps []vec, r int) int {
 	const eps = 1e-8
 	type event struct {
 		angle float64
@@ -666,7 +813,10 @@ func maxCoveredPoints(ps []vec, r int64, max func(int, int) int) int {
 			ac := math.Acos(ab.len() / float64(2*r))
 			events = append(events, event{at - ac, 1}, event{at + ac, -1})
 		}
-		sort.Slice(events, func(i, j int) bool { a, b := events[i], events[j]; return a.angle+eps < b.angle || a.angle < b.angle+eps && a.delta > b.delta })
+		sort.Slice(events, func(i, j int) bool {
+			a, b := events[i], events[j]
+			return a.angle+eps < b.angle || a.angle < b.angle+eps && a.delta > b.delta
+		})
 		mx, cnt := 0, 1 // 1 指当前固定的点 a
 		for _, e := range events {
 			cnt += e.delta
@@ -680,36 +830,36 @@ func maxCoveredPoints(ps []vec, r int64, max func(int, int) int) int {
 // 圆和矩形是否重叠
 // x1<x2, y1<y2
 // https://www.zhihu.com/question/24251545/answer/27184960
-// LC1401 https://leetcode-cn.com/problems/circle-and-rectangle-overlapping/
+// LC1401 https://leetcode.cn/problems/circle-and-rectangle-overlapping/
 func isCircleRectangleOverlap(r, ox, oy, x1, y1, x2, y2 int) bool {
 	cx, cy := float64(x1+x2)/2, float64(y1+y2)/2               // 矩形中心
 	hx, hy := float64(x2-x1)/2, float64(y2-y1)/2               // 矩形半长
 	x, y := math.Abs(float64(ox)-cx), math.Abs(float64(oy)-cy) // 转换到第一象限的圆心
-	x, y = math.Max(x-hx, 0), math.Max(y-hy, 0)                // 求圆心至矩形的最短距离矢量
+	x, y = max(x-hx, 0), max(y-hy, 0)                          // 求圆心至矩形的最短距离矢量
 	return x*x+y*y < float64(r*r)+eps
 }
 
 // 圆与扫描线
 // todo https://blog.csdn.net/hzj1054689699/article/details/87861808
-//   http://openinx.github.io/2013/01/01/plane-sweep-thinking/
-//   http://poj.org/problem?id=2932
-//   https://ac.nowcoder.com/acm/contest/7613/D
-//   https://codeforces.com/problemset/problem/814/D
+//  http://openinx.github.io/2013/01/01/plane-sweep-thinking/
+//  http://poj.org/problem?id=2932
+//  https://ac.nowcoder.com/acm/contest/7613/D
+//  https://codeforces.com/problemset/problem/814/D
 
 // 反演变换
 // https://en.wikipedia.org/wiki/Inversive_geometry
-// TODO: https://oi-wiki.org/geometry/inverse/
+// todo https://oi-wiki.org/geometry/inverse/
 
 // 三角剖分
 // todo https://oi-wiki.org/geometry/triangulation/
-//      https://cp-algorithms.com/geometry/delaunay.html
+//  https://cp-algorithms.com/geometry/delaunay.html
 //  http://poj.org/problem?id=2986
 
 // 多边形相关
-func _(min func(int64, int64) int64) {
+func _(abs func(int) int) {
 	readVec := func(in io.Reader) vec {
-		var x, y int64
-		Fscan(in, &x, &y)
+		var x, y int
+		fmt.Fscan(in, &x, &y)
 		return vec{x, y}
 	}
 
@@ -730,7 +880,7 @@ func _(min func(int64, int64) int64) {
 		return
 	}
 
-	// TODO: 扫描线：线段求交 O(nlogn)
+	// todo 扫描线：线段求交 O(nlogn)
 	// https://en.wikipedia.org/wiki/Sweep_line_algorithm
 	// N 条线段求交的扫描线算法 http://johnhany.net/2013/11/sweep-algorithm-for-segments-intersection/
 	// https://codeforces.com/problemset/problem/1359/F
@@ -761,18 +911,21 @@ func _(min func(int64, int64) int64) {
 	// 平面最近点对
 	// 返回最近点对距离的平方
 	// https://algs4.cs.princeton.edu/code/edu/princeton/cs/algs4/ClosestPair.java.html
-	// 模板题 https://www.luogu.com.cn/problem/P1429 https://codeforces.com/problemset/problem/429/D
+	// 模板题 https://www.luogu.com.cn/problem/P1429
+	// - https://codeforces.com/problemset/problem/429/D
+	// todo 字典序最小 LC2613 https://leetcode.cn/problems/beautiful-pairs/
+	// 变形：改成求「距离为平面最近点对距离的两倍」的点对个数，做法应该是类似的
 	// bichromatic closest pair 有两种类型的点，只需要额外判断类型是否不同即可 https://www.acwing.com/problem/content/121/ http://poj.org/problem?id=3714
-	var closestPair func([]vec) int64
-	closestPair = func(ps []vec) int64 {
+	var closestPair func([]vec) int
+	closestPair = func(ps []vec) int {
 		// 调用 closestPair 前需保证没有重复的点，并特判 n == 1 的情况
 		// ps 必须按照 x 坐标升序：
 		// sort.Slice(ps, func(i, j int) bool { return ps[i].x < ps[j].x })
 		n := len(ps)
 		if n <= 1 {
-			return math.MaxInt64
+			return math.MaxInt
 		}
-		m := n >> 1
+		m := n / 2
 		x := ps[m].x
 		d2 := min(closestPair(ps[:m]), closestPair(ps[m:]))
 		copy(ps, merge(ps[:m], ps[m:])) // copy 是因为要修改 slice 的内容
@@ -800,7 +953,7 @@ func _(min func(int64, int64) int64) {
 	readPolygon := func(in io.Reader, n int) []line {
 		ps := make([]vec, n)
 		for i := range ps {
-			Fscan(in, &ps[i].x, &ps[i].y)
+			fmt.Fscan(in, &ps[i].x, &ps[i].y)
 		}
 		ls := make([]line, n)
 		for i := 0; i < n-1; i++ {
@@ -813,7 +966,7 @@ func _(min func(int64, int64) int64) {
 	// 多边形面积
 	// https://cp-algorithms.com/geometry/area-of-simple-polygon.html
 	polygonArea := func(ps []vec) float64 {
-		area := int64(0)
+		area := 0
 		p0 := ps[0]
 		for i := 2; i < len(ps); i++ {
 			area += ps[i-1].sub(p0).det(ps[i].sub(p0))
@@ -827,10 +980,12 @@ func _(min func(int64, int64) int64) {
 	// 求上凸包就从倒数第二个点开始继续求
 	// https://algs4.cs.princeton.edu/code/edu/princeton/cs/algs4/GrahamScan.java.html
 	// NOTE: 坐标值范围不超过 M 的整点凸多边形的顶点数为 O(M^(2/3)) 个
-	// 模板题 https://www.luogu.com.cn/problem/P2742 LC587 https://leetcode-cn.com/problems/erect-the-fence/
-	// 构造 LCP15 https://leetcode-cn.com/problems/you-le-yuan-de-mi-gong/
+	// 模板题 https://www.luogu.com.cn/problem/P2742 
+	// - LC587 https://leetcode.cn/problems/erect-the-fence/
+	// 构造 LCP15 https://leetcode.cn/problems/you-le-yuan-de-mi-gong/
 	// 转换 https://codeforces.com/problemset/problem/1142/C
 	// 限制区间长度的区间最大均值问题 https://codeforces.com/edu/course/2/lesson/6/4/practice/contest/285069/problem/A
+	// 转换（求二维完全背包极限 lim_{maxW->∞} dp[maxW]/maxW）https://atcoder.jp/contests/abc275/tasks/abc275_g
 	// todo poj 2187 1113 1912 3608 2079 3246 3689
 	convexHull := func(ps []vec) (q []vec) {
 		sort.Slice(ps, func(i, j int) bool { return ps[i].less(ps[j]) })
@@ -872,7 +1027,7 @@ func _(min func(int64, int64) int64) {
 				j = k
 			}
 		}
-		maxD2 := int64(0)
+		maxD2 := 0
 		for i0, j0 := i, j; i != j0 || j != i0; {
 			if d2 := ch[i].dis2(ch[j]); d2 > maxD2 {
 				maxD2 = d2
@@ -895,10 +1050,12 @@ func _(min func(int64, int64) int64) {
 	// https://en.wikipedia.org/wiki/Dynamic_convex_hull
 	// 模板题 https://codeforces.com/problemset/problem/70/D
 
-	// todo 闵可夫斯基和
+	// todo 闵可夫斯基和 Minkowski sum
+	// https://en.wikipedia.org/wiki/Minkowski_addition
 	// https://www.cnblogs.com/xzyxzy/p/10229921.html
 	// https://www.luogu.com.cn/problem/P4557
 	// https://codeforces.com/problemset/problem/87/E
+	// https://codeforces.com/contest/1841/problem/F
 
 	// todo 点集的最大四边形
 	// https://www.luogu.com.cn/problem/P4166
@@ -957,16 +1114,21 @@ func _(min func(int64, int64) int64) {
 		if len(q) < 3 {
 			// 半平面交不足三个点的特殊情况，根据题意来返回
 			// 如果需要避免这种情况，可以先加入一个无穷大矩形对应的四个半平面，再求半平面交
+			// 如果不足三个点，说明面积为 0
 			return nil
 		}
 
 		// 补上首尾半平面的交点
 		q[len(q)-1].p = q[len(q)-1].l.intersection(q[0].l)
+
+		// 注：可以用三角剖分求半平面交的面积
+
 		return q
 	}
 
 	// 点 p 是否在三角形 △abc 内
-	inTriangle := func(a, b, c, p vec, abs func(int64) int64) bool {
+	// 一般是整数，浮点比较注意精度
+	inTriangle := func(a, b, c, p vec) bool {
 		pa, pb, pc := a.sub(p), b.sub(p), c.sub(p)
 		return abs(b.sub(a).det(c.sub(a))) == abs(pa.det(pb))+abs(pb.det(pc))+abs(pc.det(pa))
 	}
@@ -1022,7 +1184,7 @@ func _(min func(int64, int64) int64) {
 				return -1 // 在边界上
 			}
 			// det: 正左负右
-			k := sign(float64(p2.sub(p1).det(p.sub(p1)))) // 适配 int64 和 float64
+			k := sign(float64(p2.sub(p1).det(p.sub(p1)))) // 适配 int 和 float64
 			d1 := sign(float64(p1.y - p.y))
 			d2 := sign(float64(p2.y - p.y))
 			if k > 0 && d1 <= 0 && d2 > 0 { // 逆时针穿过射线（p 需要在 p1-p2 左侧）
@@ -1085,10 +1247,10 @@ func _(min func(int64, int64) int64) {
 		return math.Sqrt(minArea)
 	}
 
-	// TODO 矩形面积并
-	// 扫描线算法
-	// https://www.acwing.com/video/2220/
-	// 模板题 https://www.luogu.com.cn/problem/P5490
+	// 矩形面积并（离散化+扫描线）
+	// 见 segment_tree_rect.go
+
+	// todo 矩形周长并
 
 	// todo 三角形面积并
 	// 扫描线算法
@@ -1097,7 +1259,7 @@ func _(min func(int64, int64) int64) {
 	// https://www.luogu.com.cn/problem/P1222
 	// https://www.luogu.com.cn/problem/P3219
 
-	_ = []interface{}{
+	_ = []any{
 		readVec, leftMostVec, rightMostVec,
 		readPolygon, polygonArea, rotatingCalipers, convexHullPerimeter,
 		halfPlanesIntersection,
@@ -1106,29 +1268,39 @@ func _(min func(int64, int64) int64) {
 	}
 }
 
-/* 三维向量（点）*/
-type vec3 struct{ x, y, z int64 }
+/*
+三维向量（点）
+*/
+type vec3 struct{ x, y, z int }
 
 func (a vec3) less(b vec3) bool {
 	return a.x < b.x || a.x == b.x && (a.y < b.y || a.y == b.y && a.z < b.z)
 }
 
-/* 三维直线（线段）*/
+/*
+三维直线（线段）
+*/
 type line3 struct{ p1, p2 vec3 }
 
 // todo 计算几何三维入门 https://www.luogu.com.cn/blog/105254/ji-suan-ji-he-san-wei-ru-men
 func vec3Collections() {
 	var ps []vec3
-	sort.Slice(ps, func(i, j int) bool { a, b := ps[i], ps[j]; return a.x < b.x || a.x == b.x && (a.y < b.y || a.y == b.y && a.z < b.z) })
+	sort.Slice(ps, func(i, j int) bool {
+		a, b := ps[i], ps[j]
+		return a.x < b.x || a.x == b.x && (a.y < b.y || a.y == b.y && a.z < b.z)
+	})
 
 	// 三维凸包
 	// todo 模板题 https://www.luogu.com.cn/problem/P4724
 }
 
+// 空间三角形相交
+
 // 下面这些仅作为占位符表示，实际使用的时候复制上面的模板，类型改成 float64 同时 vecF 替换成 vec 等
+// todo 泛型
 type vecF struct{ x, y float64 }
 type lineF struct{ p1, p2 vecF }
-type vec3F struct{ x, y, z int64 }
+type vec3F struct{ x, y, z int }
 type line3F struct{ p1, p2 vec3F }
 type circleF struct {
 	vecF

@@ -2,6 +2,7 @@ package copypasta
 
 import (
 	"math/bits"
+	"slices"
 	"sort"
 )
 
@@ -56,13 +57,36 @@ https://codeforces.com/problemset/problem/954/F
 
 */
 
-/* 搜索+剪枝
-任意子集（不需要剪枝的话可以直接位运算枚举）
-部分子集
-排列（递归+跳过已经枚举的值）
+/* 回溯
+
+子集（也可以用二进制枚举做）
+https://codeforces.com/problemset/problem/550/B 1400
+https://codeforces.com/problemset/problem/962/C 1400
+
+组合
+https://codeforces.com/problemset/problem/1778/C 1600 也可以二进制枚举子集
+
+排列（部分题目可以用状压 DP 继续优化）
+网格 https://atcoder.jp/contests/abc326/tasks/abc326_d
+
+集合划分（贝尔数）https://oeis.org/A000110
+见下面的 partitionSet
+https://codeforces.com/problemset/problem/954/I 2200
+https://atcoder.jp/contests/abc390/tasks/abc390_d
+
+关于可行性剪枝，见 https://leetcode.cn/problems/combination-sum/solutions/2747858/liang-chong-fang-fa-xuan-huo-bu-xuan-mei-mhf9/
 
 https://www.luogu.com.cn/problem/P1379
 https://codeforces.com/problemset/problem/429/C
+爆搜 https://atcoder.jp/contests/abc233/tasks/abc233_c
+https://atcoder.jp/contests/abc319/tasks/abc319_c
+https://atcoder.jp/contests/abc197/tasks/abc197_c
+
+https://oeis.org/A038206 Can express a(n) with the digits of a(n)^2 in order, only adding plus signs
+- LC2698 https://leetcode.cn/problems/find-the-punishment-number-of-an-integer/
+https://oeis.org/A104113 Numbers which when chopped into one, two or more parts, added and squared result in the same number
+
+不允许重复的排列：见 nextPermutation
 */
 func searchCollection() {
 	// 指数型，即 n 层循环
@@ -164,7 +188,7 @@ func searchCollection() {
 	}
 
 	// 可重复组合
-	// 以 LC1467 为例 https://leetcode-cn.com/problems/probability-of-a-two-boxes-having-the-same-number-of-distinct-balls/
+	// 以 LC1467 为例 https://leetcode.cn/problems/probability-of-a-two-boxes-having-the-same-number-of-distinct-balls/
 	// 每个数至多可选 upper[i] 个，从中随机选择 m 个（m<=∑upper），求满足题设条件的概率
 	// 枚举每个数选了多少个，根据乘法原理计算某个组合的个数（例如 upper=[4,3,1]，m=4，其中选2个0，2个1就有C(4,2)*C(3,2)种）
 	// 总数有 C(∑upper,m) 种
@@ -217,7 +241,7 @@ func searchCollection() {
 	// 即有 n 个位置，从左往右地枚举每个位置上可能出现的值（值必须在 a 中且不能重复）
 	// 对比上面的子集搜索，那是对每个位置枚举是否选择（两个分支），而这里每个位置有 n 个分支
 	// https://www.luogu.com.cn/problem/P1118
-	// LC1307 https://leetcode-cn.com/problems/verbal-arithmetic-puzzle/
+	// LC1307 https://leetcode.cn/problems/verbal-arithmetic-puzzle/
 	searchPermutations := func(a []int) bool {
 		n := len(a)
 		used := 0
@@ -267,7 +291,7 @@ func searchCollection() {
 		}
 		f(s, "")
 		ss = ss[1:] // 去掉空字符串
-		sort.Strings(ss)
+		slices.Sort(ss)
 		j := 0
 		for i := 1; i < len(ss); i++ {
 			if ss[j] != ss[i] {
@@ -447,21 +471,18 @@ func searchCollection() {
 	}
 	permuteAll := func(a []int, do func()) { _permute(a, 0, do) }
 
-	reverse := func(a []int) {
-		for i, n := 0, len(a); i < n/2; i++ {
-			a[i], a[n-1-i] = a[n-1-i], a[i]
-		}
-	}
 	// 调用完之后
 	// 返回 true：a 修改为其下一个排列（即比 a 大且字典序最小的排列）
 	// 返回 false：a 修改为其字典序最小的排列（即 a 排序后的结果）
+	// - [31. 下一个排列](https://leetcode.cn/problems/next-permutation/)
+	// - [1850. 邻位交换的最小次数](https://leetcode.cn/problems/minimum-adjacent-swaps-to-reach-the-kth-smallest-number/) 2073
 	nextPermutation := func(a []int) bool {
 		n := len(a)
 		i := n - 2
 		for i >= 0 && a[i] >= a[i+1] {
 			i--
 		}
-		defer reverse(a[i+1:])
+		defer slices.Reverse(a[i+1:])
 		if i < 0 {
 			return false
 		}
@@ -474,19 +495,20 @@ func searchCollection() {
 	}
 
 	// 康托展开 Cantor Expansion
-	// 返回所给排列 perm（元素在 [1,n]）的字典序名次
+	// 返回所给排列 perm（元素在 [1,n]）的字典序名次（可以从 0 或从 1 开始，具体看代码末尾）
 	// 核心思想：对于第 i 个位置，若该位置的数是未出现在其左侧的数中第 k 大的，那么有 (k−1)×(N−i)! 种方案在该位置上比这个排列小
+	// 结合康托展开和逆康托展开，可以求出一个排列的下 k 个排列
 	// https://zh.wikipedia.org/wiki/%E5%BA%B7%E6%89%98%E5%B1%95%E5%BC%80
 	// https://oi-wiki.org/math/cantor/
 	// https://www.luogu.com.cn/problem/P5367
-	// 有重复元素 LC1830 https://leetcode-cn.com/problems/minimum-number-of-operations-to-make-string-sorted/
-	rankPermutation := func(perm []int) int64 {
-		const mod int64 = 1e9 + 7
+	// 有重复元素 LC1830 https://leetcode.cn/problems/minimum-number-of-operations-to-make-string-sorted/
+	// https://codeforces.com/problemset/problem/1443/E
+	rankPermutation := func(perm []int) int {
 		n := len(perm)
-		F := make([]int64, n)
+		F := make([]int, n)
 		F[0] = 1
 		for i := 1; i < n; i++ {
-			F[i] = F[i-1] * int64(i) % mod
+			F[i] = F[i-1] * i % mod
 		}
 
 		tree := make([]int, n+1)
@@ -505,9 +527,9 @@ func searchCollection() {
 			add(i, 1)
 		}
 
-		ans := int64(0)
+		ans := 0
 		for i, v := range perm {
-			ans += int64(sum(v-1)) * F[n-1-i] % mod
+			ans += sum(v-1) * F[n-1-i] % mod
 			add(v, -1)
 		}
 		ans++ // 从 1 开始的排名
@@ -517,7 +539,8 @@ func searchCollection() {
 
 	// 逆康托展开 Inverse Cantor Expansion
 	// 返回字典序第 k 小的排列，元素范围为 [1,n]
-	// LC60 https://leetcode-cn.com/problems/permutation-sequence/
+	// LC60 https://leetcode.cn/problems/permutation-sequence/
+	// https://codeforces.com/problemset/problem/1443/E
 	kthPermutation := func(n, k int) []int {
 		F := make([]int, n)
 		F[0] = 1
@@ -525,7 +548,7 @@ func searchCollection() {
 			F[i] = F[i-1] * i
 		}
 
-		k--
+		k-- // 如果输入是从 1 开始的，改成从 0 开始
 		perm := make([]int, n)
 		valid := make([]int, n+1)
 		for i := 1; i <= n; i++ {
@@ -533,7 +556,7 @@ func searchCollection() {
 		}
 		for i := 1; i <= n; i++ {
 			order := k/F[n-i] + 1
-			for j := 1; j <= n; j++ {
+			for j := 1; j <= n; j++ { // 从 1 开始的排列    TODO 用线段树优化
 				order -= valid[j]
 				if order == 0 {
 					perm = append(perm, j)
@@ -546,19 +569,71 @@ func searchCollection() {
 		return perm
 	}
 
+	// 集合划分（贝尔数）https://oeis.org/A000110
+	// 前缀和即递归次数  https://oeis.org/A005001 看 n+1 项
+
+	// 写法一
+	// https://atcoder.jp/contests/abc390/tasks/abc390_d
+	partitionSet := func(a []int) {
+		groups := []int{}
+		var dfs func(int)
+		dfs = func(i int) {
+			if i == len(a) {
+				// ...
+				return
+			}
+			v := a[i]
+			groups = append(groups, v)
+			dfs(i + 1)
+			groups = groups[:len(groups)-1]
+			for j := range groups {
+				groups[j] += v
+				dfs(i + 1)
+				groups[j] -= v
+			}
+		}
+		dfs(0)
+	}
+
+	// 写法二
+	// https://codeforces.com/problemset/problem/954/I 2200
+	partitionSet2 := func(limit int) {
+		roots := make([]int, limit)
+		var dfs func(int, int)
+		dfs = func(i, numOfSets int) {
+			if i == limit {
+				// ...
+				return
+			}
+			roots[i] = numOfSets // 元素 i 单独组成一个集合
+			dfs(i+1, numOfSets+1)
+			for j := range numOfSets {
+				roots[i] = j // 元素 i 加到集合 j 中
+				dfs(i+1, numOfSets)
+			}
+		}
+		dfs(0, 0)
+	}
+
 	// 迭代加深搜索
 	// 限制 DFS 深度（不断提高搜索深度）
 	// http://poj.org/problem?id=2248
 
 	// 折半枚举/双向搜索 Meet in the middle
-	// https://codeforces.com/problemset/problem/1006/F https://atcoder.jp/contests/abc271/tasks/abc271_f https://leetcode.com/discuss/interview-question/2324457/Google-Online-Assessment-Question
-	// LC805 https://leetcode.cn/problems/split-array-with-same-average/
-	// LC2035 https://leetcode.cn/problems/partition-array-into-two-arrays-to-minimize-sum-difference/
-	// O(3^(n/2)) 放A组/放B组/不选 https://www.luogu.com.cn/problem/P3067 https://www.luogu.com.cn/record/88785388
+	// - [805. 数组的均值分割](https://leetcode.cn/problems/split-array-with-same-average/) 1983
+	// - [1755. 最接近目标值的子序列和](https://leetcode.cn/problems/closest-subsequence-sum/) 2364
+	// - [2035. 将数组分成两个数组并最小化数组和的差](https://leetcode.cn/problems/partition-array-into-two-arrays-to-minimize-sum-difference/) 2490
+	// hqz 的题解 https://leetcode.cn/problems/count-almost-equal-pairs-ii/solutions/2892259/on-log2-ufen-lei-tao-lun-meet-in-the-mid-ysyy/
+	// https://codeforces.com/problemset/problem/1006/F 
+	// https://atcoder.jp/contests/abc271/tasks/abc271_f 
+	// https://leetcode.com/discuss/interview-question/2324457/Google-Online-Assessment-Question
+	// O(3^(n/2)) 放A组/放B组/不选 https://www.luogu.com.cn/problem/P3067
+	// - https://www.luogu.com.cn/record/88785388
 	// https://www.luogu.com.cn/problem/P5194
 	// https://www.luogu.com.cn/problem/P4799
 	// https://codeforces.com/problemset/problem/327/E
 	// https://atcoder.jp/contests/abc184/tasks/abc184_f
+	// NEERC 2003 https://codeforces.com/gym/101388 J
 
 	// 折半枚举 - 超大背包问题
 	// https://atcoder.jp/contests/abc184/tasks/abc184_f
@@ -587,7 +662,7 @@ func searchCollection() {
 		}
 		f(0)
 		l := ws
-		sort.Ints(l)
+		slices.Sort(l)
 		// l 去重略
 
 		ws, end = nil, n
@@ -681,6 +756,7 @@ func searchCollection() {
 		iterWithLimits, iterWithLimitsAndSum,
 		combinations, combinationsWithRepetition,
 		permutations, permuteAll, nextPermutation, rankPermutation, kthPermutation,
+		partitionSet, partitionSet2,
 		bigKnapsack, bigKnapsack2,
 	}
 }
@@ -691,7 +767,7 @@ func searchCollection() {
 枚举大小为 k 的子集
 枚举格点周围（曼哈顿距离、切比雪夫距离）
 */
-func _(min, max func(int, int) int) {
+func _(abs func(int) int) {
 	// 枚举 {0,1,...,n-1} 的全部子集
 	loopSet := func(a []int) {
 		n := len(a)
@@ -712,6 +788,9 @@ func _(min, max func(int, int) int) {
 
 	// 枚举 set 的全部子集
 	// 作为结束条件，处理完 0 之后，会有 -1&set == set
+	//
+	// 你可能会好奇，为什么 sub = (sub - 1) & set 这样写一定可以「跳到」下一个子集呢？会不会漏呢？
+	// 正确性理由见 https://leetcode.cn/circle/discuss/CaOJ45/
 	loopSubset := func(n, set int) {
 		// 所有子集
 		for sub, ok := set, true; ok; ok = sub != set {
@@ -779,7 +858,9 @@ func _(min, max func(int, int) int) {
 	// 我的视频讲解 https://www.bilibili.com/video/BV1na41137jv?t=15m43s
 	// https://en.wikipedia.org/wiki/Combinatorial_number_system#Applications
 	// 比如在 n 个数中求满足某种性质的最大子集，则可以从 n 开始倒着枚举子集大小，直到找到一个符合性质的子集
-	// 例题（TS1）https://codingcompetitions.withgoogle.com/codejam/round/0000000000007706/0000000000045875
+	// 例题（TS1）GCJ 2018 R2 Costume Change https://codingcompetitions.withgoogle.com/codejam/round/0000000000007706/0000000000045875
+	// LC2397 https://leetcode.cn/problems/maximum-rows-covered-by-columns/
+	// https://leetcode.cn/problems/closed-number-lcci/
 	loopSubsetK := func(a []int, k int) {
 		n := len(a)
 		for sub := 1<<k - 1; sub < 1<<n; {
@@ -838,7 +919,7 @@ func _(min, max func(int, int) int) {
 	}
 
 	// 顺时针遍历矩阵从外向内的第 d 圈（保证不自交）
-	// LC1914 https://leetcode-cn.com/problems/cyclically-rotating-a-grid/
+	// LC1914 https://leetcode.cn/problems/cyclically-rotating-a-grid/
 	loopAround := func(a [][]int, d int) []int {
 		n, m := len(a), len(a[0])
 		b := make([]int, 0, (n+m-d*4-2)*2)
@@ -876,7 +957,7 @@ func _(min, max func(int, int) int) {
 	}
 
 	/*
-		遍历以 (ox, oy) 为中心的曼哈顿距离为 dis 范围内的格点
+		遍历以 (ox, oy) 为中心的曼哈顿距离为 dis 的【边界】上的格点
 		例如 dis=2 时：
 		  #
 		 # #
@@ -902,8 +983,23 @@ func _(min, max func(int, int) int) {
 		}
 	}
 
+	{
+		// 从上到下，遍历以 (ox, oy) 为中心的曼哈顿距离 <= dis 的【所有】格点
+		var n, m, ox, oy, dis int
+		for i := max(ox-dis, 0); i <= ox+dis && i < n; i++ {
+			d := dis - abs(ox-i)
+			for j := max(oy-d, 0); j <= oy+d && j < m; j++ {
+				if i == ox && j == oy {
+					continue
+				}
+				// f(i, j)
+
+			}
+		}
+	}
+
 	// 曼哈顿圈序遍历
-	// LC1030 https://leetcode-cn.com/problems/matrix-cells-in-distance-order/
+	// LC1030 https://leetcode.cn/problems/matrix-cells-in-distance-order/
 	loopAllManhattan := func(n, m, ox, oy int, f func(x, y int)) {
 		f(ox, oy)
 		maxDist := max(ox, n-1-ox) + max(oy, m-1-oy)
@@ -922,7 +1018,7 @@ func _(min, max func(int, int) int) {
 	}
 
 	/*
-		遍历以 (ox, oy) 为中心的切比雪夫距离为 dis 范围内的格点
+		遍历以 (ox, oy) 为中心的切比雪夫距离为 dis 的【边界】上的格点
 		#####
 		#   #
 		# @ #
@@ -948,29 +1044,35 @@ func _(min, max func(int, int) int) {
 		}
 	}
 
+	// 主对角线（从左上到右下）
 	// 第一排在右上，最后一排在左下
-	// 每排从左上到右下
+	// - [2711. 对角线上不同值的数量差](https://leetcode.cn/problems/difference-of-number-of-distinct-values-on-diagonals/) 1429
+	// - [3446. 按对角线进行矩阵排序](https://leetcode.cn/problems/sort-matrix-by-diagonals/) 
+	// - [1329. 将矩阵按对角线排序](https://leetcode.cn/problems/sort-the-matrix-diagonally/) 1548
+	// - [562. 矩阵中最长的连续1线段](https://leetcode.cn/problems/longest-line-of-consecutive-one-in-matrix/)（会员题）
+	// 注意下面 loopAntiDiagonal 还有一些题目
 	loopDiagonal := func(n, m int) {
-		for s := 1; s < n+m; s++ {
-			l := max(0, m-s)
-			r := min(m-1, m-s+n-1)
-			for j := l; j <= r; j++ {
-				i := s + j - m
+		for K := 1; K < n+m; K++ {
+			minJ := max(m-K, 0)
+			maxJ := min(n+m-1-K, m-1)
+			for j := minJ; j <= maxJ; j++ {
+				i := K + j - m
 				_ = i
 
 			}
 		}
 	}
 
+	// 副对角线（从左下到右上）
 	// 第一排在左上，最后一排在右下
-	// 每排从左下到右上
-	// LC498 https://leetcode.cn/problems/diagonal-traverse/
+	// - [498. 对角线遍历](https://leetcode.cn/problems/diagonal-traverse/)
+	// - [562. 矩阵中最长的连续1线段](https://leetcode.cn/problems/longest-line-of-consecutive-one-in-matrix/)（会员题）主+副
 	loopAntiDiagonal := func(n, m int) {
-		for s := 0; s < n+m-1; s++ {
-			l := max(0, s-n+1)
-			r := min(m-1, s)
-			for j := l; j <= r; j++ {
-				i := s - j
+		for K := 0; K < n+m-1; K++ {
+			minJ := max(K-n+1, 0)
+			maxJ := min(K, m-1)
+			for j := minJ; j <= maxJ; j++ {
+				i := K - j
 				_ = i
 
 			}
@@ -1034,12 +1136,43 @@ func _(min, max func(int, int) int) {
 	}
 }
 
-//
+/*
+网格/矩阵上的搜索
+NOTE: 对于 n*m 的网格图，BFS 最多只占用 O(min(n,m)) 的空间，而 DFS 最多会占用 O(nm) 的空间
 
-// 网格/矩阵上的搜索
-// NOTE: 对于 n*m 的网格图，BFS 最多只占用 O(min(n,m)) 的空间，而 DFS 最多会占用 O(nm) 的空间
-// 易错题 https://codeforces.com/problemset/problem/540/C
-// 思维转换 LCP31 https://leetcode-cn.com/problems/Db3wC1/
+网格图 DFS
+- [417. 太平洋大西洋水流问题](https://leetcode.cn/problems/pacific-atlantic-water-flow/)
+   - https://codeforces.com/problemset/problem/1651/D 1900
+- [827. 最大人工岛](https://leetcode.cn/problems/making-a-large-island/) 1934
+   - https://codeforces.com/contest/616/problem/C 1600
+   - 可以改一排或一列 https://codeforces.com/problemset/problem/1985/H1
+   - 可以改一排和一列 https://codeforces.com/problemset/problem/1985/H2
+https://codeforces.com/problemset/problem/1948/C 1300
+https://codeforces.com/problemset/problem/723/D 1600
+https://codeforces.com/problemset/problem/598/D 1700
+https://codeforces.com/problemset/problem/1365/D 1700
+
+网格图 BFS
+https://codeforces.com/problemset/problem/35/C 1500
+https://codeforces.com/problemset/problem/329/B 1500
+https://codeforces.com/problemset/problem/2041/D 1700
+https://codeforces.com/problemset/problem/1955/H 2300
+https://codeforces.com/problemset/problem/1301/F 2600 BFS 进阶玩法
+- 同色入队 - 往四周走 - 同色跳跃 - 往四周走 - 同色跳跃 - ...
+- 记录访问过的颜色
+https://atcoder.jp/contests/abc317/tasks/abc317_e
+另见 graph.go 中的 0-1 BFS
+
+综合
+- [2258. 逃离火灾](https://leetcode.cn/problems/escape-the-spreading-fire/) 2347
+   - https://www.luogu.com.cn/problem/UVA11624
+易错题 https://codeforces.com/problemset/problem/540/C 2000
+
+其它
+- [54. 螺旋矩阵](https://leetcode.cn/problems/spiral-matrix/)
+- [59. 螺旋矩阵 II](https://leetcode.cn/problems/spiral-matrix-ii/)
+
+*/
 func gridCollection() {
 	type pair struct{ x, y int }
 	dir4 := []pair{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} // 上下左右
@@ -1062,7 +1195,7 @@ func gridCollection() {
 
 	// 矩形网格图，返回从起点 (s.x,s.y) 到其余所有可达点的最短距离。'#' 表示无法通过的格子   bfsGridAll 单源最短距离
 	// https://codeforces.com/contest/1520/problem/G
-	// LC2146 https://leetcode-cn.com/problems/k-highest-ranked-items-within-a-price-range/
+	// LC2146 https://leetcode.cn/problems/k-highest-ranked-items-within-a-price-range/
 	disAll := func(g [][]byte, sx, sy int) [][]int {
 		n, m := len(g), len(g[0])
 		dis := make([][]int, n)
@@ -1127,7 +1260,7 @@ func gridCollection() {
 	}
 
 	// 从 s 出发寻找 t，返回所有 t 所处的坐标。'#' 表示无法通过的格子   bfsGrid 可达
-	// https://leetcode-cn.com/contest/season/2020-spring/problems/xun-bao/
+	// https://leetcode.cn/contest/season/2020-spring/problems/xun-bao/
 	findAllReachableTargets := func(g [][]byte, s pair, t byte) (ps []pair) {
 		n, m := len(g), len(g[0])
 		vis := make([][]bool, n)
@@ -1173,16 +1306,17 @@ func gridCollection() {
 		}
 		for i, row := range g {
 			for j, v := range row {
-				if v == valid && !vis[i][j] {
-					cnt++
-					f(i, j)
+				if v != valid && !vis[i][j] {
+					continue
 				}
+				cnt++
+				f(i, j)
 			}
 		}
 		return
 	}
 
-	// 下列代码来自 LC1254 https://leetcode-cn.com/problems/number-of-closed-islands/
+	// 下列代码来自 LC1254 https://leetcode.cn/problems/number-of-closed-islands/
 	// NOTE: 对于搜索格子的题，可以不用创建 vis 而是通过修改格子的值为范围外的值（如零、负数、'#' 等）来做到这一点  dfsGrid
 	dfsValidGrids := func(g [][]byte) (comps [][]pair) {
 		n, m := len(g), len(g[0])
@@ -1213,19 +1347,20 @@ func gridCollection() {
 		}
 		for i, row := range g {
 			for j, v := range row {
-				if v == validCell && !vis[i][j] {
-					comp = []pair{}
-					if f(i, j) {
-						comps = append(comps, comp)
-						// do comp ...
-					}
+				if v != validCell && !vis[i][j] {
+					continue
+				}
+				comp = []pair{}
+				if f(i, j) {
+					comps = append(comps, comp)
+					// do comp ...
 				}
 			}
 		}
 		return
 	}
 
-	// 周赛 212D https://leetcode-cn.com/problems/rank-transform-of-a-matrix/
+	// 周赛 212D https://leetcode.cn/problems/rank-transform-of-a-matrix/
 	findSameValueCC := func(mat [][]int) {
 		type pair struct{ x, y int }
 		type vPos struct {

@@ -34,8 +34,9 @@ func isTLE(f func()) bool {
 	}
 }
 
-func AssertEqualStringCase(t *testing.T, testCases [][2]string, targetCaseNum int, runFunc ioFunc) {
+func AssertEqualStringCaseWithPrefix(t *testing.T, testCases [][2]string, targetCaseNum int, runFunc ioFunc, prefix string) {
 	if len(testCases) == 0 {
+		t.Error("empty testcase")
 		return
 	}
 
@@ -50,27 +51,33 @@ func AssertEqualStringCase(t *testing.T, testCases [][2]string, targetCaseNum in
 			continue
 		}
 
-		input := removeExtraSpace(tc[0])
-		const maxInputSize = 150
-		inputInfo := input
-		if len(inputInfo) > maxInputSize { // 截断过长的输入
-			inputInfo = inputInfo[:maxInputSize] + "..."
-		}
-		expectedOutput := removeExtraSpace(tc[1])
+		t.Run(fmt.Sprintf("%sCase %d", prefix, curCaseNum+1), func(t *testing.T) {
+			input := removeExtraSpace(tc[0])
+			const maxInputSize = 150
+			inputInfo := input
+			if len(inputInfo) > maxInputSize { // 截断过长的输入
+				inputInfo = inputInfo[:maxInputSize] + "..."
+			}
+			expectedOutput := removeExtraSpace(tc[1])
 
-		mockReader := strings.NewReader(input)
-		mockWriter := &strings.Builder{}
-		_f := func() { runFunc(mockReader, mockWriter) }
-		if targetCaseNum == 0 && isTLE(_f) {
-			allPassed = false
-			t.Errorf("Time Limit Exceeded %d\nInput:\n%s", curCaseNum+1, inputInfo)
-			continue
-		} else if targetCaseNum != 0 {
-			_f()
-		}
-		actualOutput := removeExtraSpace(mockWriter.String())
+			mockReader := strings.NewReader(input)
+			mockWriter := &strings.Builder{}
+			_f := func() { runFunc(mockReader, mockWriter) }
+			if targetCaseNum == 0 && isTLE(_f) {
+				allPassed = false
+				t.Errorf("Time Limit Exceeded %d\nInput:\n%s", curCaseNum+1, inputInfo)
+				return
+			} 
+			if targetCaseNum != 0 {
+				_f()
+			}
 
-		t.Run(fmt.Sprintf("Case %d", curCaseNum+1), func(t *testing.T) {
+			// 还有剩余未读入的内容
+			if mockReader.Len() > 0 {
+				t.Log("[警告] 有未读入的内容")
+			}
+
+			actualOutput := removeExtraSpace(mockWriter.String())
 			if !assert.Equal(t, expectedOutput, actualOutput, "Wrong Answer %d\nInput:\n%s", curCaseNum+1, inputInfo) {
 				allPassed = false
 				handleOutput(actualOutput)
@@ -89,8 +96,10 @@ func AssertEqualStringCase(t *testing.T, testCases [][2]string, targetCaseNum in
 		AssertEqualStringCase(t, testCases, 0, runFunc)
 		return
 	}
+}
 
-	t.Log("OK")
+func AssertEqualStringCase(t *testing.T, testCases [][2]string, targetCaseNum int, runFunc ioFunc) {
+	AssertEqualStringCaseWithPrefix(t, testCases, targetCaseNum, runFunc, "")
 }
 
 func AssertEqualFileCaseWithName(t *testing.T, dir, inName, ansName string, targetCaseNum int, runFunc ioFunc) {

@@ -1,16 +1,14 @@
 package main
 
-import "math"
-
 // github.com/EndlessCheng/codeforces-go
-func findClosestNumber(nums []int) (ans int) {
-	min := math.MaxInt32
+func findClosestNumber(nums []int) int {
+	ans := nums[0]
 	for _, x := range nums {
-		if y := abs(x); y < min || y == min && x > ans {
-			min, ans = y, x
+		if abs(x) < abs(ans) || abs(x) == abs(ans) && x > 0 {
+			ans = x
 		}
 	}
-	return
+	return ans
 }
 
 func abs(x int) int { if x < 0 { return -x }; return x }

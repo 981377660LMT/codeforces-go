@@ -6,89 +6,100 @@ import (
 	"os"
 )
 
-// github.com/EndlessCheng/codeforces-go
-type (
-	initData struct{ n int }
-	request  struct{ q []int }
-	response struct{ v int }
-	answer   struct{ ans []int }
-)
-
+// https://space.bilibili.com/206214
 type interaction interface {
 	readInitData() initData
 	query(request) response
 	printAnswer(answer)
 }
 
-type io struct {
+type stdIO struct {
 	in  *bufio.Reader
 	out *bufio.Writer
 }
 
-func (io io) readInitData() (d initData) {
-	Fscan(io.in, &d.n)
+type (
+	initData struct{ n int }
+	request  struct{ q int }
+	response struct{ v int } // 如果有多种不同类型的返回值，改成 string 或者 []any
+	answer   struct{ ans int }
+)
+
+func (io stdIO) readInitData() initData {
+	in := io.in
+
+	var n int
+	Fscan(in, &n)
+	// TODO 初始输入格式？
+
+	return initData{n}
+}
+
+func (io stdIO) query(q request) (resp response) {
+	in, out := io.in, io.out
+
+	Fprintln(out, "?", q.q)
+	//Fprint(out, "?")
+	//Fprint(out, " ", len(q.q)) // TODO 输出 query 长度？
+	//for _, v := range q.q { Fprint(out, " ", v) }
+	//Fprintln(out)
+
+	out.Flush()
+	Fscan(in, &resp.v)
+	//if resp.v < 0 { panic(-1) }
 	return
 }
 
-func (io io) query(q request) (resp response) {
-	Fprint(io.out, "?")
-	for _, v := range q.q {
-		Fprint(io.out, " ", v)
-	}
-	Fprintln(io.out)
-	io.out.Flush()
+func (io stdIO) printAnswer(a answer) {
+	out := io.out
 
-	Fscan(io.in, &resp.v)
-	if resp.v < 0 {
-		panic(-1)
-	}
-	return
-}
+	Fprintln(out, "!", a.ans)
+	//Fprint(out, "!")
+	//Fprint(out, " ", len(a.ans)) // TODO 输出答案长度？
+	//for _, v := range a.ans { Fprint(out, " ", v) }
+	//Fprintln(out)
 
-func (io io) printAnswer(a answer) {
-	Fprint(io.out, "!")
-	//Fprint(io.out, " ", len(a.ans))
-	for _, v := range a.ans {
-		Fprint(io.out, " ", v)
-	}
-	Fprintln(io.out)
-	io.out.Flush()
+	out.Flush()
 
-	// TODO: optional, panic if we got -1
-	var res int
-	if Fscan(io.in, &res); res < 0 {
-		panic(res)
-	}
+	// TODO judge 是否返回答案非法？（通常是 move on to the next test case）
+	//var state int
+	//Fscan(io.in, &state)
+	//if state < 0 { panic(state) }
 }
 
 func doInteraction(it interaction) {
+	// TODO 初始输入格式？
 	dt := it.readInitData()
 	n := dt.n
+	_ = n
 
-	q := func(q ...int) int {
-		//for i := range q {
-		//	q[i]++
-		//}
+	// TODO query 格式？
+	get := func(q int) int {
+		//for i := range q { q[i]++ }
 		return it.query(request{q}).v
 	}
+	_ = get
 
-	var ans []int
-	ans = make([]int, n) //
+	// TODO 答案类型？
+	var ans int
+	//ans := make([]int, n)
 	defer func() { it.printAnswer(answer{ans}) }()
 
+	// TODO: 在这里实现
 
 }
 
-// TODO: check output format before submit
+// TODO: 运行 & 测试！检查格式是否正确
+func main() { run() }
+
 func run() {
 	in := bufio.NewReader(os.Stdin)
 	out := bufio.NewWriter(os.Stdout)
 
 	T := 1
-	Fscan(in, &T) //
+	// TODO：多测？
+	Fscan(in, &T)
 	for ; T > 0; T-- {
-		doInteraction(io{in, out})
+		doInteraction(stdIO{in, out})
 	}
 }
-
-func main() { run() }

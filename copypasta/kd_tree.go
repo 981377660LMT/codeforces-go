@@ -1,9 +1,6 @@
 package copypasta
 
-import (
-	"math/rand"
-	"time"
-)
+import "math/rand"
 
 /* k-d tree: k-dimensional tree; k 维树
 https://en.wikipedia.org/wiki/K-d_tree
@@ -16,25 +13,10 @@ todo 题单 https://www.luogu.com.cn/training/4295
 模板题 https://www.luogu.com.cn/problem/P4148
 todo https://codeforces.com/problemset/problem/44/G
 */
-
 type kdNode struct {
 	lr          [2]*kdNode
 	p, mi, mx   [2]int // 0 为 x，1 为 y
 	sz, val, sm int
-}
-
-func (kdNode) min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func (kdNode) max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 func (o *kdNode) size() int {
@@ -59,8 +41,8 @@ func (o *kdNode) maintain() {
 		o.mx[i] = o.p[i]
 		for _, ch := range o.lr {
 			if ch != nil {
-				o.mi[i] = o.min(o.mi[i], ch.mi[i])
-				o.mx[i] = o.max(o.mx[i], ch.mx[i])
+				o.mi[i] = min(o.mi[i], ch.mi[i])
+				o.mx[i] = max(o.mx[i], ch.mx[i])
 			}
 		}
 	}
@@ -169,7 +151,6 @@ type kdTree struct {
 }
 
 func newKdTree() *kdTree {
-	rand.Seed(time.Now().UnixNano())
 	return &kdTree{}
 }
 

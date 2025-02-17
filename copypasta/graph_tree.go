@@ -1,10 +1,13 @@
 package copypasta
 
 import (
-	. "fmt"
-	"io"
+	"maps"
+	"math"
 	"math/bits"
+	"reflect"
+	"slices"
 	"sort"
+	"unsafe"
 )
 
 /*
@@ -14,19 +17,131 @@ import (
 
 NOTE: 对于有根树的题，可以考虑加上 g[0] = append(g[0], -1) 来简化代码
 NOTE: 由于树上任意两点间的路径等价于两条点到根的路径的对称差，处理一些树上异或的问题可以往这个方向思考
-NOTE: 注意特判只有一条边的情况，此时两个叶结点对应同一条边
+NOTE: 注意特判整棵树只有一条边的情况，此时两个叶结点对应同一条边
 NOTE: 一些树上点对问题，可以从「每条边所能产生的贡献」来思考 https://codeforces.com/problemset/problem/700/B
+NOTE: 节点数小于 √n 的同层节点对不超过 n√n，节点数大于 √n 的层的数量小于 √n 个 https://codeforces.com/problemset/problem/1806/E
+NOTE: 树上两点的关系：v 和 w 相等【特判】、v 是 w 的祖先、w 是 v 的祖先、其它（v 和 w 在两棵不同子树中）https://codeforces.com/problemset/problem/1778/E
+NOTE: 记录从 x 到根的路径上的每个点到 x 的距离，就可以从 y 走到根的路径上，找到到 x 的距离，从而求出 y 到 x 的距离 https://codeforces.com/problemset/problem/1790/F
 
+随机树有期望 n/2 个叶子节点
+On the number of leaves in a random recursive tree https://projecteuclid.org/journals/brazilian-journal-of-probability-and-statistics/volume-29/issue-4/On-the-number-of-leaves-in-a-random-recursive-tree/10.1214/14-BJPS252.pdf
+
+简单 DFS
+- [2368. 受限条件下可到达节点的数目](https://leetcode.cn/problems/reachable-nodes-with-restrictions/) 1477
+- [3004. 相同颜色的最大子树](https://leetcode.cn/problems/maximum-subtree-of-the-same-color/)（会员题）
+https://codeforces.com/problemset/problem/1675/D 1300 树分成尽量少的链
+https://codeforces.com/problemset/problem/580/C 1500
+https://codeforces.com/problemset/problem/34/D 1600
+
+巧妙 DFS
+https://atcoder.jp/contests/abc163/tasks/abc163_f 2470=CF2579 树上路径计数
+
+BFS
+https://codeforces.com/problemset/problem/2018/C 1700
+
+利用递归栈快速标记祖先节点 https://codeforces.com/problemset/problem/1774/E
 树上统计（从下往上）典型题 https://codeforces.com/problemset/problem/766/E
 不错的构造 https://codeforces.com/problemset/problem/260/D
 分类讨论的好题 https://codeforces.com/problemset/problem/765/E
 
+树上贪心
+https://codeforces.com/problemset/problem/1029/E 2100
+
+树上路径异或
+LC2791 https://leetcode.cn/problems/count-paths-that-can-form-a-palindrome-in-a-tree/
+http://poj.org/problem?id=3764
+https://www.luogu.com.cn/problem/UVA13277 https://onlinejudge.org/index.php?option=com_onlinejudge&Itemid=8&category=878&page=show_problem&problem=5201
+
+树上移动 move on tree
+https://codeforces.com/problemset/problem/1774/E
+
 https://en.wikipedia.org/wiki/Tree_traversal#Pre-order,_NLR
 前序中序构造二叉树 + 判定是否合法 https://atcoder.jp/contests/abc255/tasks/abc255_f
+
+树的最小表示：复杂度分析
+https://leetcode.cn/problems/special-binary-string/solutions/1731760/on-log-n-by-hqztrue-nrmw/
+
+其它
+https://codeforces.com/problemset/problem/1491/E 2400
 */
 
 // namespace
 type tree struct{}
+
+// 树哈希 Hashing root trees
+// O(nlogn)
+// https://codeforces.com/blog/entry/113465?#comment-1010870
+// 判断是否为对称树（可以调整儿子顺序）https://codeforces.com/problemset/problem/1800/G
+func (*tree) hash(g [][]int, root int) {
+	tid := map[string]int{}
+	var dfs func(int, int) int
+	dfs = func(v, fa int) int {
+		ids := make([]int, 0, len(g[v]))
+		for _, w := range g[v] {
+			if w != fa {
+				ids = append(ids, dfs(w, v))
+			}
+		}
+		slices.Sort(ids)
+		// do ids...
+
+		_ids := append(ids[:0:0], ids...) // 如果后面用不到 ids 可以去掉
+		sh := (*reflect.SliceHeader)(unsafe.Pointer(&_ids))
+		sh.Len *= bits.UintSize / 8
+		s := *(*string)(unsafe.Pointer(sh))
+		id, ok := tid[s]
+		if !ok {
+			id = len(tid) // 从 0 开始
+			tid[s] = id
+		}
+		return id
+	}
+	dfs(root, -1)
+}
+
+// 树同构
+// AHU 算法
+// https://oi-wiki.org/graph/tree-ahu/
+// https://wwwmayr.in.tum.de/konferenzen/Jass08/courses/1/smal/Smal_Paper.pdf
+// https://logic.pdmi.ras.ru/~smal/files/smal_jass08_slides.pdf
+// todo https://www.zhihu.com/question/55484468/answer/991551284
+// todo hashing 的一些正确姿势 https://zhuanlan.zhihu.com/p/104346215
+//
+// https://www.luogu.com.cn/problem/P5043
+// 与换根 DP 结合：
+// - https://codeforces.com/contest/763/problem/D
+// - https://codeforces.com/problemset/problem/1794/E 参考代码 https://codeforces.com/contest/1794/submission/196015876
+// https://open.kattis.com/problems/twochartsbecomeone
+
+// https://codeforces.com/contest/342/problem/E
+func (*tree) bfsMultiSources(g [][]int, starts []int) {
+	dis := make([]int, len(g))
+	for i := range dis {
+		dis[i] = 1e9
+	}
+	type pair struct{ v, fa int }
+	q := []pair{}
+	for _, v := range starts {
+		q = append(q, pair{v, -1})
+	}
+	bfs := func(q []pair) {
+		for _, p := range q {
+			dis[p.v] = 0
+		}
+		for len(q) > 0 {
+			p := q[0]
+			q = q[1:]
+			v := p.v
+			for _, w := range g[v] {
+				if w != p.fa && dis[v]+1 < dis[w] {
+					dis[w] = dis[v] + 1
+					q = append(q, pair{w, v})
+				}
+			}
+		}
+	}
+	bfs(q)
+}
 
 // DFS: 树上两点路径
 func (*tree) path(st, end int, g [][]int) (path []int) {
@@ -51,24 +166,47 @@ func (*tree) path(st, end int, g [][]int) (path []int) {
 	return
 }
 
+// 预处理从 v 到 w 走一步的节点 move1[v][w]
+// 定义 v 到 v 走一步的节点为 v
+// https://codeforces.com/problemset/problem/1771/D
+func (*tree) move1(g [][]int) [][]int {
+	move1 := make([][]int, len(g))
+	for i := range move1 {
+		move1[i] = make([]int, len(g))
+	}
+	for rt := range move1 {
+		var build func(int, int)
+		build = func(v, fa int) {
+			move1[v][rt] = fa
+			for _, w := range g[v] {
+				if w != fa {
+					build(w, v)
+				}
+			}
+		}
+		build(rt, rt)
+	}
+	return move1
+}
+
 // 两个基本信息：节点深度和子树大小
 // 节点深度：
 // - 深度与祖先：v 是 w 的祖先，当且仅当 dep[v]+dist(v,w)=dep[w]
 // - 与 DFS 序结合，可以表达子树在某个深度上的一段信息（见 tree.inOutTimestamp）
 // - 直径 中心（见 tree.diameter）
 // 子树大小：
-// - 与 DFS 序结合，把子树转化成区间（见 tree.subtreeSize）
+// - 与 DFS 序结合，把子树转化成区间（见 tree.dfnOrder）
 // - 重心 点分治（见 tree.findCentroid 等）
 // - 重链剖分（见 tree.heavyLightDecomposition）
 // - 用于计算每条边对所有路径产生的贡献 https://codeforces.com/problemset/problem/1401/D
 //
 // 离线好题 https://codeforces.com/problemset/problem/570/D
 // 这题的在线写法是把相同深度的 dfn 放入同一组（同组内的 dfn 是有序的），对于一棵子树的某个深度，在该组中必对应着连续的一段 dfn，二分即可找到
-func (*tree) depthSize(n, root int, g [][]int, max func(int, int) int, v int) {
+func (*tree) depthSize(n, root int, g [][]int, v int) {
 	dep := make([]int, n)
 	size := make([]int, n)
 	maxDep := make([]int, n) // EXTRA: 子树最大深度
-	var build func(v, fa, d int) int
+	var build func(int, int, int) int
 	build = func(v, fa, d int) int {
 		dep[v] = d
 		sz := 1
@@ -85,55 +223,92 @@ func (*tree) depthSize(n, root int, g [][]int, max func(int, int) int, v int) {
 
 	// EXTRA: 一种贪心策略是，将 g[v] 按照 maxDep 从大到小排序
 	// https://codeforces.com/contest/1510/submission/111986751
-	sort.Slice(g[v], func(i, j int) bool { return maxDep[g[v][i]] > maxDep[g[v][j]] })
+	slices.SortFunc(g[v], func(a, b int) int { return maxDep[b] - maxDep[a] })
 }
 
-// 树上每个子树的信息：子树大小，DFS 序（从 1 开始）
-// 这样的话 [o.dfn, o.dfn+o.size-1] 就表示一棵子树，方便用树状数组/线段树维护
-// 【时间戳的写法见后面】
-// 模板题 https://ac.nowcoder.com/acm/contest/6383/B
-// 例题 https://codeforces.com/problemset/problem/383/C
-//     https://codeforces.com/problemset/problem/877/E
-func (*tree) subtreeSize(n, root int, g [][]int) {
-	type node struct{ dfn, size int }
-	nodes := make([]node, n)
+// DFS 序（从 0 开始）
+// 另见后面的 inOutTimestamp
+// 讲解：https://leetcode.cn/problems/minimum-score-after-removals-on-a-tree/solution/dfs-shi-jian-chuo-chu-li-shu-shang-wen-t-x1kk/
+//
+// LC3327 https://leetcode.cn/problems/check-if-dfs-strings-are-palindromes/
+// https://codeforces.com/problemset/problem/1899/G 1900
+// https://codeforces.com/problemset/problem/877/E 2000
+// https://codeforces.com/problemset/problem/383/C 2000
+// https://codeforces.com/problemset/problem/620/E 2100
+// https://codeforces.com/problemset/problem/916/E 2400
+// https://codeforces.com/problemset/problem/1110/F 2600
+// https://codeforces.com/problemset/problem/163/E 2800 结合 AC 自动机 
+// https://ac.nowcoder.com/acm/contest/6383/B
+func (*tree) dfnOrder(root int, g [][]int, a []int) {
+	n := len(a)
+	newOrder := make([]int, n)
+	// 闭区间 [l,r]   0 <= l <= r <= n-1
+	nodes := make([]struct{ l, r int }, n)
 	dfn := 0
-	var build func(v, fa int) int
-	build = func(v, fa int) int {
+	var buildDFN func(int, int)
+	buildDFN = func(v, fa int) {
+		nodes[v].l = dfn
+		newOrder[dfn] = a[v] // 写这里是先序遍历，如果题目要求后序遍历，把这一行和下一行的 dfn++ 移到 for 循环后面
 		dfn++
-		nodes[v].dfn = dfn
-		sz := 1
 		for _, w := range g[v] {
 			if w != fa {
-				sz += build(w, v)
+				buildDFN(w, v)
 			}
 		}
-		nodes[v].size = sz
-		return sz
+		nodes[v].r = dfn - 1
 	}
-	build(root, -1)
+	buildDFN(root, -1)
 
 	// 返回 [f 是 v 的祖先节点]
 	// f == v 的情况请单独处理
-	isAncestor := func(f, v int) bool { return nodes[f].dfn < nodes[v].dfn && nodes[v].dfn < nodes[f].dfn+nodes[f].size }
+	// LC2322 https://leetcode.cn/problems/minimum-score-after-removals-on-a-tree/ 2392
+	// 判断给定点集是否都在一条路径上 https://codeforces.com/contest/1702/problem/G2 2000
+	// https://codeforces.com/problemset/problem/1527/D 2400
+	isAncestor := func(f, v int) bool { return nodes[f].l < nodes[v].l && nodes[v].l <= nodes[f].r }
 
 	{
-		dfnToNodeID := make([]int, n+1)
-		for i, o := range nodes {
-			dfnToNodeID[o.dfn] = i
+		dfnToNodeID := make([]int, n)
+		for v, o := range nodes {
+			dfnToNodeID[o.l] = v
 		}
 	}
 
 	{
+		// 如何使用？一般配合树状数组/线段树等数据结构
 		var v int
 		var update, query func(int, int)
 		var queryOne func(int)
 
-		// 注意 o.dfn 从 1 开始
 		o := nodes[v]
-		update(o.dfn, o.dfn+o.size-1) // 更新子树
-		query(o.dfn, o.dfn+o.size-1)  // 查询子树
-		queryOne(nodes[v].dfn)        // 查询单个节点
+		update(o.l, o.r) // 更新子树（闭区间）
+		query(o.l, o.r)  // 查询子树（闭区间）
+		queryOne(o.l)    // 查询单个节点
+	}
+
+	{
+		// 如果递归消耗太多内存，可以改为手动模拟栈
+		// 下面的代码是有向树，不需要传入 fa
+		// https://codeforces.com/contest/163/submission/233981400
+		root := 0
+		nodes := make([]struct{ l, r int }, n) // 左闭右开
+		type stackInfo struct{ v, i int }
+		st := []stackInfo{{root, 0}}
+		nodes[root].l = 1
+		dfn := 0
+		for len(st) > 0 {
+			p := st[len(st)-1]
+			v, i := p.v, p.i
+			if i < len(g[v]) {
+				dfn++
+				w := g[v][i]
+				nodes[w].l = dfn
+				st[len(st)-1].i++
+				st = append(st, stackInfo{w, 0})
+			} else {
+				nodes[v].r = dfn + 1
+				st = st[:len(st)-1]
+			}
+		}
 	}
 
 	_ = isAncestor
@@ -142,9 +317,12 @@ func (*tree) subtreeSize(n, root int, g [][]int) {
 // 每个节点的入出时间戳
 // 应用：可以 O(1) 判断 fa 是否为 v 的祖先节点（是否在根到 v 的路径上）
 // 视频讲解 https://www.bilibili.com/video/BV1pW4y1r7xs/
-// 例题 https://codeforces.com/problemset/problem/1328/E
-// LC2322 https://leetcode.cn/problems/minimum-score-after-removals-on-a-tree/
-// 好题（需要充分利用入出时间戳的性质）https://codeforces.com/problemset/problem/1528/C
+// 文字讲解 https://leetcode.cn/problems/minimum-score-after-removals-on-a-tree/solution/dfs-shi-jian-chuo-chu-li-shu-shang-wen-t-x1kk/
+// LC2322 https://leetcode.cn/problems/minimum-score-after-removals-on-a-tree/ 2392
+// https://codeforces.com/problemset/problem/1328/E 1900 例题
+// https://codeforces.com/problemset/problem/1528/C 2300 好题（需要充分利用入出时间戳的性质）
+// https://codeforces.com/problemset/problem/2002/D2 2300
+// https://codeforces.com/problemset/problem/1416/D 2600
 // 给定一棵 n 个点的完全 k 叉树的先序遍历，还原这棵树 https://ac.nowcoder.com/acm/contest/9247/B
 //    先用 BFS 建树，然后 DFS 跑建好的树
 //    也可以不用 BFS，根据完全 k 叉树的性质直接建图：（点的范围从 0 到 n-1）
@@ -154,66 +332,76 @@ func (*tree) subtreeSize(n, root int, g [][]int) {
 //    }
 // 其他：见 mo.go 中的树上莫队部分
 func (*tree) inOutTimestamp(g [][]int, root int) {
+	// DFS 序
 	timeIn := make([]int, len(g))
 	timeOut := make([]int, len(g))
 	at := make([]int, len(g)+1)
-	clock := 0 // -1（0 适用于多个连通块的情况）
-	var f func(v, fa int)
-	f = func(v, fa int) {
+	clock := 0 // 也可以改成从 -1 开始
+	var build func(int, int)
+	build = func(v, fa int) {
 		clock++
 		timeIn[v] = clock
 		at[clock] = v
 		for _, w := range g[v] {
 			if w != fa {
-				f(w, v)
+				build(w, v)
 			}
 		}
 		timeOut[v] = clock
 	}
-	f(root, -1)
+	build(root, -1) // 注意森林的情况
 
 	// 返回 [f 是 v 的祖先节点]
 	// f == v 的情况请单独处理
+	// https://codeforces.com/problemset/problem/916/E 2400
 	isAncestor := func(f, v int) bool { return timeIn[f] < timeIn[v] && timeIn[v] <= timeOut[f] }
-	sameSubtree := func(v, w int) bool { return isAncestor(v, w) || isAncestor(w, v) }
+	isAncestor2 := func(v, w int) bool { return isAncestor(v, w) || isAncestor(w, v) }
 
 	{
 		// 与深度时间戳结合，二分求某个子树在某个深度的节点范围
-		// https://codeforces.com/problemset/problem/208/E 加强版 https://www.luogu.com.cn/problem/P5384（需要差分）
-		// https://codeforces.com/problemset/problem/246/E
-		// https://codeforces.com/problemset/problem/570/D
-		// https://codeforces.com/problemset/problem/1076/E
+		// https://www.lanqiao.cn/problems/5892/learning/?contest_id=145
+		// https://codeforces.com/problemset/problem/1076/E 1900
+		// https://codeforces.com/problemset/problem/208/E 2100 
+		// - https://www.luogu.com.cn/problem/P5384
+		// - https://atcoder.jp/contests/abc202/tasks/abc202_e
+		// https://codeforces.com/problemset/problem/570/D 2200
+		// https://codeforces.com/problemset/problem/246/E 2400 CF208E + 离线
+		// https://www.luogu.com.cn/problem/P7768
+		var a []int // 点权   read... 
 		type info struct{ tin, tout, dep int }
-		is := make([]info, len(g))
-		depT := make([][]int, len(g))
-		t := 0
-		var f func(v, fa, d int)
+		nodes := make([]info, len(g))
+		depTS := make([][]int, len(g))
+		rowVal := make([][]int, len(g))
+		ts := 0
+		var f func(int, int, int)
 		f = func(v, fa, d int) {
-			t++
-			is[v].tin = t
-			is[v].dep = d
-			depT[d] = append(depT[d], t)
+			ts++
+			nodes[v].tin = ts
+			nodes[v].dep = d
+			depTS[d] = append(depTS[d], ts)
+			rowVal[d] = append(rowVal[d], a[v])
 			for _, w := range g[v] {
 				if w != fa {
 					f(w, v, d+1)
 				}
 			}
-			is[v].tout = t
+			nodes[v].tout = ts
 		}
 		f(root, -1, 0)
 
-		// 深度 d 上的这一排节点与子树 v 求交集，返回对应的深度 d 的节点区间 [l,r)
+		// 返回子树 v 中的绝对深度为 d 的这一排节点在 depTS[d] 中的下标范围 [l,r)
+		// 结合 RMQ 可以求出这一排节点的最大点权
+		// d += nodes[v].dep // 相对深度：如果 d 是从 v 开始算的话，要加上节点在整棵树的深度
 		query := func(v, d int) (int, int) {
-			nf := is[v]
-			//d += nf.dep // 如果 d 是从 v 开始算的话还要加上节点在整棵树的深度
-			l := sort.SearchInts(depT[d], nf.tin)
-			r := sort.SearchInts(depT[d], nf.tout+1)
+			nf := nodes[v]
+			l := sort.SearchInts(depTS[d], nf.tin)
+			r := sort.SearchInts(depTS[d], nf.tout+1)
 			return l, r
 		}
 		_ = query
 	}
 
-	_, _ = isAncestor, sameSubtree
+	_, _ = isAncestor, isAncestor2
 }
 
 // 树上最小路径覆盖，要求路径之间不相交，即每个顶点恰好被覆盖一次（路径长度可以为 0，即一个点）
@@ -246,16 +434,16 @@ func (*tree) minPathCover(g [][]int) int {
 	return len(g) - edgeNum
 }
 
-// 树的直径/最长链（DP 求法另见 dp.go 中的 diameter）
+// 树的直径/最长链       （树形 DP 做法另见 dp.go 中的 diameter）
 // 返回树的某条直径的两端点以及直径长度（最长链长度）
 // 树的中心：树的直径的中点。直径长度为偶数时有一个，为奇数时有两个
-//    如果给每条边加一个中点，那么可以保证树的中心为一个
+// - 如果给每条边加一个中点，那么可以保证树的中心为一个
 // 性质：
-//    直径的中点到所有叶子的距离和最小
-//    对于两棵树，记第一棵树直径两端点为 u 和 v，第二棵树直径两端点为 x 和 y。若用一条边连接两棵树，则新树存在某条直径，其两端点一定是 u,v,x,y 中的两个点
+// - 直径的中点到所有叶子的距离和最小
+// - 对于两棵树，记第一棵树直径两端点为 u 和 v，第二棵树直径两端点为 x 和 y。若用一条边连接两棵树，则新树存在某条直径，其两端点一定是 u,v,x,y 中的两个点
 //
 // 为什么不能用类似找直径的做法求**图**的直径呢？比如做两次 BFS
-// 你可以用这个例子试一下：
+// 反例：
 // 1 2
 // 1 3
 // 2 4
@@ -265,29 +453,38 @@ func (*tree) minPathCover(g [][]int) int {
 //
 // 随机树的直径 https://zhuanlan.zhihu.com/p/398621082
 // 树的直径与重心（含动态维护） https://www.luogu.com.cn/blog/Loveti/problem-tree
-// LC1245 https://leetcode-cn.com/problems/tree-diameter/
-// EXTRA: 森林的情况 https://codeforces.com/problemset/problem/455/C
-// 转换的好题 https://codeforces.com/problemset/problem/734/E
-// 转换成求部分直径 https://codeforces.com/problemset/problem/1617/E https://oeis.org/A072339
-// 必须边 https://www.luogu.com.cn/problem/P3304 https://www.acwing.com/problem/content/description/391/
-// 求树中任意一个与 x 距离为 k 的点 https://www.luogu.com.cn/problem/T238762?contestId=65460
+//
+// LC1245 https://leetcode.cn/problems/tree-diameter/
+// https://codeforces.com/problemset/problem/1404/B 1900
+// https://codeforces.com/problemset/problem/455/C 2100 两棵树连边，连边之后直径最小
+// - 简化版 LC3203 https://leetcode.cn/problems/find-minimum-diameter-after-merging-two-trees/
+// https://codeforces.com/problemset/problem/734/E 2100 转换的好题 
+// https://codeforces.com/problemset/problem/1000/E 2100 e-BCC
+// https://codeforces.com/problemset/problem/379/F 2400
+// https://codeforces.com/problemset/problem/911/F 2400 贪心
+// https://codeforces.com/problemset/problem/1819/C 2400
+// https://codeforces.com/problemset/problem/1617/E 2700 转换成求部分直径 
+// - https://oeis.org/A072339
+// https://www.luogu.com.cn/problem/P3304 必须边 
+// https://www.luogu.com.cn/problem/T238762?contestId=65460 求树中任意一个与 x 距离为 k 的点 
+// https://www.lanqiao.cn/problems/5890/learning/?contest_id=145
 func (*tree) diameter(st int, g [][]int) (int, int, int) {
 	maxD, u := -1, 0
-	var f func(v, fa, d int)
-	f = func(v, fa, d int) {
+	var findMaxDepth func(int, int, int)
+	findMaxDepth = func(v, fa, d int) {
 		if d > maxD {
 			maxD, u = d, v
 		}
 		for _, w := range g[v] {
 			if w != fa {
-				f(w, v, d+1) // d+e.wt
+				findMaxDepth(w, v, d+1) // d+e.wt
 			}
 		}
 	}
-	f(st, -1, 0)
+	findMaxDepth(st, -1, 0)
 	dv := u
 	maxD = -1
-	f(u, -1, 0)
+	findMaxDepth(u, -1, 0)
 	dw := u
 
 	// EXTRA: 获取所有直径端点
@@ -297,20 +494,20 @@ func (*tree) diameter(st int, g [][]int) (int, int, int) {
 	// 下标最小的直径端点 https://codeforces.com/problemset/problem/592/D
 	// 树上非严格次长距离 https://ac.nowcoder.com/acm/contest/9557/C（另一种做法见下面的 secondDiameter）
 	isEnd := make([]bool, len(g))
-	var findEnds func(v, fa, d int)
-	findEnds = func(v, fa, d int) {
+	var findAllEnds func(v, fa, d int)
+	findAllEnds = func(v, fa, d int) {
 		if d == maxD {
 			isEnd[v] = true
 			return
 		}
 		for _, w := range g[v] {
 			if w != fa {
-				findEnds(w, v, d+1)
+				findAllEnds(w, v, d+1)
 			}
 		}
 	}
-	findEnds(dv, -1, 0)
-	findEnds(dw, -1, 0)
+	findAllEnds(dv, -1, 0)
+	findAllEnds(dw, -1, 0)
 	ends := []int{}
 	for v, e := range isEnd {
 		if e {
@@ -347,6 +544,7 @@ func (*tree) diameter(st int, g [][]int) (int, int, int) {
 
 	// EXTRA: 获取直径上的所有节点 path
 	// path[len(path)/2] 即为树的中心（之一）
+	// https://codeforces.com/problemset/problem/1819/C
 	path := []int{}
 	var findDiameterPath func(v, fa int) bool
 	findDiameterPath = func(v, fa int) bool {
@@ -366,29 +564,28 @@ func (*tree) diameter(st int, g [][]int) (int, int, int) {
 
 	// EXTRA: 求出无根树上每个点的最远点及距离（紫书 p.282 思考题）
 	// 从任意直径的两个端点出发跑 DFS，取最大值
-	// 相关题目 https://codeforces.com/problemset/problem/337/D
+	// https://codeforces.com/problemset/problem/337/D 2000
+	// https://codeforces.com/problemset/problem/911/F 2400
 	// 每个点相距为 k 的点 https://atcoder.jp/contests/abc267/tasks/abc267_f
+	// https://leetcode.cn/problems/find-the-last-marked-nodes-in-tree/
 	farthest := make([]struct{ v, d int }, len(g))
 	for i := range farthest {
 		farthest[i].d = -1
 	}
-	var cur int
-	var findFarthest func(v, fa, d int)
-	findFarthest = func(v, fa, d int) {
+	var findFarthest func(int, int, int, int)
+	findFarthest = func(v, fa, d, tar int) {
 		if d > farthest[v].d {
 			farthest[v].d = d
-			farthest[v].v = cur
+			farthest[v].v = tar
 		}
 		for _, w := range g[v] {
 			if w != fa {
-				findFarthest(w, v, d+1)
+				findFarthest(w, v, d+1, tar)
 			}
 		}
 	}
-	cur = dv
-	findFarthest(dv, -1, 0)
-	cur = dw
-	findFarthest(dw, -1, 0)
+	findFarthest(dv, -1, 0, dv)
+	findFarthest(dw, -1, 0, dw)
 
 	return dv, dw, maxD
 }
@@ -446,245 +643,470 @@ func (*tree) secondDiameter(st int, g [][]int) int {
 // 树的直径与重心（含动态维护） https://www.luogu.com.cn/blog/Loveti/problem-tree
 // 树重心的性质及动态维护 https://www.cnblogs.com/qlky/p/5781081.html
 // 求两个重心 https://codeforces.com/problemset/problem/1406/C
-// 求每棵子树的重心 http://codeforces.com/problemset/problem/685/B
+// 求每棵子树的重心 https://codeforces.com/problemset/problem/685/B
 // Edge replacement 后哪些点可以是重心 https://codeforces.com/problemset/problem/708/C
-func (*tree) findCentroid(n, st int, g [][]int, max func(int, int) int) (ct int) {
-	minMaxSubSize := int(1e9)
-	var findCt func(v, fa int) int
+// todo https://atcoder.jp/contests/abc362/tasks/abc362_f 重心性质
+func (*tree) findCentroid(n, root int, g [][]int) (centroid int) {
+	minOfMaxSubSize := math.MaxInt
+	var findCt func(int, int) int
 	findCt = func(v, fa int) int {
 		size := 1
 		maxSubSize := 0
 		for _, w := range g[v] {
 			if w != fa {
 				sz := findCt(w, v)
-				size += sz
 				maxSubSize = max(maxSubSize, sz)
+				size += sz
 			}
 		}
 		maxSubSize = max(maxSubSize, n-size) // 向上的子树大小
-		if maxSubSize < minMaxSubSize {
-			minMaxSubSize = maxSubSize
-			ct = v
+		if maxSubSize < minOfMaxSubSize {
+			minOfMaxSubSize = maxSubSize
+			centroid = v
 		}
 		return size
 	}
-	findCt(st, -1)
+	findCt(root, -1)
 	return
 }
 
-// 点分治 - 重心分解（CD, Centroid Decomposition）
+// 点分治 重心分解（CD, Centroid Decomposition）
+// 适合处理树上路径相关问题
+// 考察完经过某个重心的所有路径，后面就无需再考察这个重心了，直接将其删除
+// 每次以重心为根递归处理，这样做递归深度不会超过 O(logn)
+// 或者说，每个点至多被 O(log n) 个在重心拐弯的路径覆盖
 // https://oi-wiki.org/graph/tree-divide/
 // https://zhuanlan.zhihu.com/p/359209926
 // https://codeforces.com/blog/entry/81661
-// 点分治略解 https://www.luogu.com.cn/blog/user9012/dian-fen-zhi-lve-xie
+// https://www.luogu.com.cn/blog/user9012/dian-fen-zhi-lve-xie
+// https://liu-cheng-ao.blog.uoj.ac/blog/2969
+// todo 重心树 代码 https://www.luogu.com.cn/record/103317317
 //
-// 模板题 https://codeforces.com/problemset/problem/321/C
-// todo 长至多为 k 的路径个数 http://poj.org/problem?id=1741 https://www.acwing.com/problem/content/254/
-// todo 长为 k 的路径是否存在（多次询问）http://poj.org/problem?id=2114 https://www.luogu.com.cn/problem/P3806
-// 好题 https://codeforces.com/contest/1174/problem/F https://codeforces.com/contest/1174/submission/82371930
-// todo UVa12161 https://onlinejudge.org/index.php?option=com_onlinejudge&Itemid=8&page=show_problem&problem=3313
+// 模板题 https://www.luogu.com.cn/problem/P4178
+// - http://poj.org/problem?id=1741
+// todo 无需去重的做法（染色法）https://www.luogu.com.cn/blog/1239004072Angel/solution-p4178
+// 多个询问 https://www.luogu.com.cn/problem/P3806
+// - http://poj.org/problem?id=2114
+// https://www.luogu.com.cn/problem/P4149
+// 也可以树形 DP https://codeforces.com/problemset/problem/161/D 1800
+// https://codeforces.com/problemset/problem/321/C 2100
+// https://codeforces.com/problemset/problem/914/E 2400
+// 好题 https://codeforces.com/contest/1174/problem/F 2400
+// - https://codeforces.com/contest/1174/submission/82371930
+// todo https://codeforces.com/contest/776/problem/F 2800
+//  https://www.luogu.com.cn/problem/P2664
 //  https://www.luogu.com.cn/problem/SP2939
-//  ∑∑min(av,aw)*dis(v,w) https://ac.nowcoder.com/acm/contest/11171/D
-func (*tree) centroidDecomposition(n, root int, g [][]int) {
-	type node struct{ dep, fa int }
-	nodes := make([]node, n)
-	var build func(v, fa, d int)
-	build = func(v, fa, d int) {
-		nodes[v] = node{d, fa}
-		for _, w := range g[v] {
-			if w != fa {
-				build(w, v, d+1)
-			}
-		}
-	}
-	build(root, -1, 0)
+//  ∑∑min(a[i],a[j])*dis(i,j) https://ac.nowcoder.com/acm/contest/11171/D
+//  UVa12161 https://onlinejudge.org/index.php?option=com_onlinejudge&Itemid=8&page=show_problem&problem=3313
+// 距离相关
+// - https://atcoder.jp/contests/yahoo-procon2018-final/tasks/yahoo_procon2018_final_c
+// - https://leetcode.cn/problems/maximize-the-number-of-target-nodes-after-connecting-trees-i/ 
+// -- https://leetcode.com/problems/maximize-the-number-of-target-nodes-after-connecting-trees-i/solutions/6103520/centroid-decomposition-o-n-log-n-m-log-m-solution/
+// - https://judge.yosupo.jp/problem/vertex_add_range_contour_sum_on_tree
 
-	usedCentroid := make([]bool, n)
-	size := make([]int, n)
-	var calcSize func(v, fa int) int
-	calcSize = func(v, fa int) int {
-		sz := 1
-		for _, w := range g[v] {
-			if w != fa && !usedCentroid[w] {
-				sz += calcSize(w, v)
-			}
-		}
-		size[v] = sz
-		return sz
-	}
-	var compSize int
-	var findCentroid func(v, fa int) int
-	findCentroid = func(v, fa int) int {
-		for _, w := range g[v] {
-			if w != fa && !usedCentroid[w] && size[w] > compSize>>1 {
-				return findCentroid(w, v)
-			}
-		}
-		return v
-	}
-
-	var f func(v int)
-	f = func(v int) {
-		calcSize(v, -1)
-		compSize = size[v]
-		ct := findCentroid(v, -1)
-		usedCentroid[ct] = true
-		//defer func() { usedCentroid[ct] = false }()
-
-		// do ct...
-
-		for _, w := range g[ct] {
-			if !usedCentroid[w] {
-				f(w)
-			}
-		}
-	}
-	f(root)
-}
-
-// 点分治：求树上距离不超过 upperDis 的点对数
-// todo 待整理 https://www.luogu.com.cn/problem/P4178 http://poj.org/problem?id=1741
-// todo 求树上距离等于 k 的点对数 https://codeforces.com/problemset/problem/161/D 可以参考洛谷的代码
-func (*tree) numPairsWithDistanceLimit(g [][]struct{ to, wt int }, root int, upperDis int64, max func(int, int) int) int64 {
-	usedCentroid := make([]bool, len(g))
-
+// 点分治 · 其一
+// 遍历右边的子树 B，去看左边的子树 A（路径是 A 中的点 - 重心 - B 中的点）
+func (tree) centroidDecomposition(g [][]struct{ to, wt int }) int {
+	deleted := make([]bool, len(g))
+	// 注：其实只需要保存 ct 的邻居的 size，但这并不好维护
 	size := make([]int, len(g))
-	var calcSize func(int, int) int
-	calcSize = func(v, fa int) int {
-		sz := 1
-		for _, e := range g[v] {
-			if w := e.to; w != fa && !usedCentroid[w] {
-				sz += calcSize(w, v)
-			}
-		}
-		size[v] = sz
-		return sz
-	}
-
-	var compSize int
-	var findCentroid func(int, int) (int, int)
-	findCentroid = func(v, fa int) (minSize, ct int) {
-		minSize = int(1e9)
+	var findCentroid func(int, int, int) (int, int, int)
+	findCentroid = func(v, fa, compSize int) (minSize, ct, faCt int) {
+		minSize = math.MaxInt
 		maxSubSize := 0
-		sizeV := 1 // 除去了 usedCentroid 子树的剩余大小
+		size[v] = 1
 		for _, e := range g[v] {
-			if w := e.to; w != fa && !usedCentroid[w] {
-				if minSizeW, ctW := findCentroid(w, v); minSizeW < minSize {
-					minSize = minSizeW
-					ct = ctW
+			w := e.to
+			if w != fa && !deleted[w] {
+				minSizeW, ctW, faCtW := findCentroid(w, v, compSize)
+				if minSizeW < minSize {
+					minSize, ct, faCt = minSizeW, ctW, faCtW
 				}
 				maxSubSize = max(maxSubSize, size[w])
-				sizeV += size[w]
+				size[v] += size[w]
 			}
 		}
-		maxSubSize = max(maxSubSize, compSize-sizeV)
+		maxSubSize = max(maxSubSize, compSize-size[v])
 		if maxSubSize < minSize {
-			minSize = maxSubSize
-			ct = v
+			minSize, ct, faCt = maxSubSize, v, fa
 		}
 		return
 	}
 
-	var disToCentroid []int64
-	var calcDisToCentroid func(v, fa int, d int64)
-	calcDisToCentroid = func(v, fa int, d int64) {
-		disToCentroid = append(disToCentroid, d)
-		for _, e := range g[v] {
-			if w := e.to; w != fa && !usedCentroid[w] {
-				calcDisToCentroid(w, v, d+int64(e.wt))
-			}
-		}
-	}
+	ans := 0
+	tmp := make([]int, len(g))
+	var dfs func(int, int, int)
+	dfs = func(v, fa, compSize int) {
+		_, ct, faCt := findCentroid(v, fa, compSize)
+		//if size[v] == 1 {
+		//	return
+		//}
 
-	countPairs := func(ds []int64) int64 {
-		cnt := int64(0)
-		//sort.Ints(ds)
-		sort.Slice(ds, func(i, j int) bool { return ds[i] < ds[j] })
-		j := len(ds)
-		for i, di := range ds {
-			for ; j > 0 && di+ds[j-1] > upperDis; j-- {
-			}
-			cnt += int64(j)
-			if j > i {
-				cnt--
-			}
-		}
-		return cnt >> 1
-	}
-
-	var f func(v, fa int) int64
-	f = func(v, fa int) (ans int64) {
-		calcSize(v, fa)
-		compSize = size[v]
-		_, ct := findCentroid(v, fa)
-		usedCentroid[ct] = true
-		defer func() { usedCentroid[ct] = false }()
-
-		// 统计按 ct 分割后的子树中的点对数
+		pathValSet := map[int]bool{0: true} // 0 表示重心的数据
 		for _, e := range g[ct] {
-			if w := e.to; !usedCentroid[w] {
-				ans += f(w, v)
+			w := e.to
+			if deleted[w] {
+				continue
+			}
+			tmp := tmp[:0]
+			var f func(int, int, int)
+			f = func(v, fa, pathVal int) {
+				// do path & pathValSet like 2sum
+
+				tmp = append(tmp, pathVal)
+				for _, e := range g[v] {
+					if w := e.to; w != fa && !deleted[w] {
+						f(w, v, pathVal+e.wt)
+					}
+				}
+			}
+			f(w, ct, e.wt)
+			// 注意在递归结束后，才把 tmp 的数据加入 pathValSet
+			// 否则会把在同一棵子树内的数据当作另一棵子树的数据
+			for _, pathVal := range tmp {
+				pathValSet[pathVal] = true
 			}
 		}
 
-		// 统计经过 ct 的点对数
-		// 0 是方便统计包含 ct 的部分
-		ds := []int64{0}
+		// 删除重心
+		deleted[ct] = true
 		for _, e := range g[ct] {
-			if w := e.to; !usedCentroid[w] {
-				disToCentroid = []int64{}
-				calcDisToCentroid(w, ct, int64(e.wt))
-				ans -= countPairs(disToCentroid)
-				ds = append(ds, disToCentroid...)
+			w := e.to
+			if !deleted[w] {
+				if w != faCt {
+					dfs(w, ct, size[w])
+				} else {
+					dfs(w, ct, compSize-size[ct])
+				}
 			}
 		}
-		ans += countPairs(ds)
-		return
 	}
-	return f(root, -1)
+	dfs(0, -1, len(g))
+	return ans
 }
 
-// 点分树（动态点分治）
-// todo https://oi-wiki.org/graph/dynamic-tree-divide/
-// todo 模板题 https://www.luogu.com.cn/problem/P6329
-
-// 最近公共祖先 · 其一 · 基于树上倍增和二分搜索
-// O(nlogn) 预处理，O(logn) 查询
-// 适用于查询量和节点数等同的情形
-// NOTE: 多个点的 LCA 等于 dfn_min 和 dfn_max 的 LCA
-// https://oi-wiki.org/graph/lca/#_5
-// 模板题 https://www.luogu.com.cn/problem/P3379
-// https://codeforces.com/problemset/problem/519/E
-// https://atcoder.jp/contests/arc060/tasks/arc060_c
-// https://codeforces.com/problemset/problem/33/D
-// 路径点权乘积 https://ac.nowcoder.com/acm/contest/6913/C
-// 树上倍增应用（静态路径查询）：代码见下面的 EXTRA 部分
-//    维护最大值（与 MST 结合）https://codeforces.com/problemset/problem/609/E
-//       变体 https://codeforces.com/problemset/problem/733/F
-//    维护最大值（与 MST 结合）LC1697 https://leetcode-cn.com/problems/checking-existence-of-edge-length-limited-paths/
-//    维护最大值（与 MST 结合）LC1724（上面这题的在线版）https://leetcode-cn.com/problems/checking-existence-of-edge-length-limited-paths-ii/
-//    维护最大值和严格次大值（严格次小 MST）：见 graph.go 中的 strictlySecondMST
-//    维护前十大（点权）https://codeforces.com/problemset/problem/587/C
-// 树上倍增-查询深度最小的未被标记的点 https://codeforces.com/problemset/problem/980/E
-// 题目推荐 https://cp-algorithms.com/graph/lca.html#toc-tgt-2
-// todo poj2763 poj1986 poj3728
-// 其他：见 mo.go 中的树上莫队部分
-func (*tree) lcaBinarySearch(n, root int, g [][]int, max func(int, int) int) {
-	const mx = 17 // bits.Len(最大节点数)
-	pa := make([][mx]int, n)
-	dep := make([]int, n)
-	var build func(v, p, d int)
-	build = func(v, p, d int) {
-		pa[v][0] = p
-		dep[v] = d
+// 点分治 · 其二
+// 适用场景：对每个点，计算和这个点有关的【路径信息】，比如距离、路径上的节点满足什么性质等
+// 1. 从重心出发，统计整个重心连通块的数据
+// 2. 对于重心的子树 A，先去掉子树 A 在第 1 步中统计的数据
+// 3. 然后递归子树 A，对于子树 A 中的每个点 x，计算子树 A 中的点经过 x 到不在子树 A 的点的【路径信息】
+// 4. 递归结束，恢复子树 A 的数据，处理重心的下一棵子树 B，回到第 2 步
+// 5. 去掉整个重心连通块的数据，处理下一个重心连通块
+// 下面的代码以 https://codeforces.com/problemset/problem/914/E 2400 为例
+// - 对于每个顶点，输出经过该顶点的回文路径的数量
+// todo https://leetcode.com/problems/maximize-the-number-of-target-nodes-after-connecting-trees-i/solutions/6103520/centroid-decomposition-o-n-log-n-m-log-m-solution/
+func (tree) centroidDecomposition2(g [][]int, s string) []int {
+	deleted := make([]bool, len(g))
+	size := make([]int, len(g))
+	var findCentroid func(int, int, int) (int, int, int)
+	findCentroid = func(v, fa, compSize int) (minSize, ct, faCt int) {
+		minSize = math.MaxInt
+		maxSubSize := 0
+		size[v] = 1
 		for _, w := range g[v] {
-			if w != p {
-				build(w, v, d+1)
+			if w != fa && !deleted[w] {
+				minSizeW, ctW, faCtW := findCentroid(w, v, compSize)
+				if minSizeW < minSize {
+					minSize, ct, faCt = minSizeW, ctW, faCtW
+				}
+				maxSubSize = max(maxSubSize, size[w])
+				size[v] += size[w]
+			}
+		}
+		maxSubSize = max(maxSubSize, compSize-size[v])
+		if maxSubSize < minSize {
+			minSize, ct, faCt = maxSubSize, v, fa
+		}
+		return
+	}
+
+	ans := make([]int, len(g))
+	for i := range ans {
+		ans[i] = 1
+	}
+
+	// 更新从 ct 出发的路径信息
+	// delta = 1 或 -1
+	cnt := [1 << 20]int{}
+	var updateCC func(int, int, int, int)
+	updateCC = func(v, fa, delta, pathMask int) {
+		//pathMask++
+		pathMask ^= 1 << (s[v] - 'a')
+		cnt[pathMask] += delta
+		for _, w := range g[v] {
+			if w != fa && !deleted[w] {
+				updateCC(w, v, delta, pathMask)
 			}
 		}
 	}
-	build(root, -1, 0)
-	// 倍增
+
+	// （用两数之和的思路思考）
+	// 计算「经过 v 向上，在重心拐弯，到其它子树」的路径信息
+	// pathMask 从 ct 的儿子开始
+	// 每个 v 至多被 O(log n) 个在重心拐弯的路径覆盖
+	var calc func(int, int, int) int
+	calc = func(v, fa, pathMask int) int {
+		pathMask ^= 1 << (s[v] - 'a')
+		// 单独计算：从 v 出发的路径信息
+		res := cnt[pathMask]
+		for i := 1; i < len(cnt); i <<= 1 {
+			res += cnt[pathMask^i]
+		}
+		// 把 v 下面的也加上，这样最终算出的是经过 v 的路径信息
+		for _, w := range g[v] {
+			if w != fa && !deleted[w] {
+				res += calc(w, v, pathMask)
+			}
+		}
+		ans[v] += res
+		return res
+	}
+
+	var dfs func(int, int, int)
+	dfs = func(v, fa, compSize int) {
+		_, ct, faCt := findCentroid(v, fa, compSize)
+
+		updateCC(ct, -1, 1, 0)
+		// 单独计算：从 ct 出发的路径信息
+		res := cnt[0]
+		for i := 1; i < len(cnt); i <<= 1 {
+			res += cnt[i]
+		}
+		// 再加上经过 ct 的路径信息
+		for _, w := range g[ct] {
+			if deleted[w] {
+				continue
+			}
+			// 排除 w 子树后再计算
+			updateCC(w, ct, -1, 1<<(s[ct]-'a'))
+			res += calc(w, ct, 0)
+			updateCC(w, ct, 1, 1<<(s[ct]-'a'))
+		}
+		// v->w 和 w->v 算了两次，同时去掉 [v] 这一个点的路径信息（注意初始化的时候 ans[i] = 1）
+		ans[ct] += res / 2
+
+		// 去掉整个重心连通块的路径信息
+		updateCC(ct, -1, -1, 0)
+		// 删除重心
+		deleted[ct] = true
+
+		// 处理其它重心连通块
+		for _, w := range g[ct] {
+			if !deleted[w] {
+				if w != faCt {
+					dfs(w, ct, size[w])
+				} else {
+					dfs(w, ct, compSize-size[ct])
+				}
+			}
+		}
+	}
+	dfs(0, -1, len(g))
+	return ans
+}
+
+// 动态点分治 点分树
+// 维护 x 到 ct 的信息和 ct 到其余点的信息，就可以快速地处理 x 到其余所有点的信息（对于一个 x 来说，它的 ct 有 O(logn) 个）
+// 适用于不关心树的形态的问题，比如路径问题，联通块问题，寻找关键点问题等等
+// 提示：结合【贡献法】
+// https://oi-wiki.org/graph/dynamic-tree-divide/
+// https://oi-wiki.org/graph/tree-divide/#%E7%82%B9%E5%88%86%E6%A0%91
+//
+// 无修改 https://www.luogu.com.cn/problem/P3241
+// 单点修改 https://www.luogu.com.cn/problem/P6329
+// todo 点分树+堆 https://www.luogu.com.cn/problem/P2056 https://www.luogu.com.cn/problem/SP2666
+//  借助点分树移动答案 https://www.luogu.com.cn/problem/P3345
+//  动态加点的点分树+平衡树 https://www.luogu.com.cn/problem/P3920 
+//  - 除去动态加点就是点分树套路。加点时默认新点的点分父亲为原树父亲，当某点分子树不平衡度超过某个阈值，重新点分治即可。
+//  边分树+虚树 https://www.luogu.com.cn/problem/P4220
+//  边分树+虚树 https://www.luogu.com.cn/problem/P4565
+//  思维 | 最大深度最小的点分树 https://www.luogu.com.cn/problem/P5912
+//  所有路径的点权异或和 + 单点修改 https://codeforces.com/gym/527120/problem/B CCPC 2024 上海市赛
+func (*tree) centroidDecompositionTree(g [][]struct{ to, wt int }, root int, a []int) {
+	deleted := make([]bool, len(g))
+	size := make([]int, len(g))
+	var findCentroid func(int, int, int) (int, int, int)
+	findCentroid = func(v, fa, compSize int) (minSize, ct, faCt int) {
+		minSize = math.MaxInt
+		maxSubSize := 0
+		size[v] = 1
+		for _, e := range g[v] {
+			w := e.to
+			if w != fa && !deleted[w] {
+				if minSizeW, ctW, faCtW := findCentroid(w, v, compSize); minSizeW < minSize {
+					minSize, ct, faCt = minSizeW, ctW, faCtW
+				}
+				maxSubSize = max(maxSubSize, size[w])
+				size[v] += size[w]
+			}
+		}
+		maxSubSize = max(maxSubSize, compSize-size[v])
+		if maxSubSize < minSize {
+			minSize, ct, faCt = maxSubSize, v, fa
+		}
+		return
+	}
+
+	// paCts[x] 存储着 x 到其 ct 的信息（x 在 O(logn) 个重心连通块中）
+	// paCts[x][0] 是最大的重心连通块，paCts[x][-1] 是最小的重心连通块
+	// 注意：这个顺序不能表示与 x 的远近关系（可能 x 就在 paCts[x][0] 旁边，但离 paCts[x][1] 比较远）
+	type disInfo struct{ ct, sonI, ctDis int }
+	paCts := make([][]disInfo, len(g))
+
+	// sonInfo[ct][i] 存储着 ct 到其重心连通块内的 g[ct][i] 这棵子树的其余点的信息
+	sonInfo := make([][]fenwick, len(g))
+
+	// mergeSonInfo[ct] 存储着 ct 到其重心连通块内的其余点的信息（不含 ct 这个点）
+	mergeSonInfo := make([]fenwick, len(g))
+
+	var dfs func(int, int, int)
+	dfs = func(v, fa, compSize int) {
+		_, ct, faCt := findCentroid(v, fa, compSize)
+
+		sonInfo[ct] = make([]fenwick, len(g[ct]))
+		totA := make(fenwick, compSize+1)
+		for idx, e := range g[ct] {
+			w := e.to
+			if deleted[w] {
+				continue
+			}
+			var sizeW int
+			if w != faCt {
+				sizeW = size[w]
+			} else {
+				sizeW = compSize - size[ct]
+			}
+			sumA := make(fenwick, sizeW+1)
+			var f func(int, int, int)
+			f = func(v, fa, d int) {
+				paCts[v] = append(paCts[v], disInfo{ct, idx, d})
+				sumA[d] += a[v]
+				totA[d] += a[v]
+				for _, e := range g[v] {
+					w := e.to
+					if w != fa && !deleted[w] {
+						f(w, v, d+e.wt) // d+1
+					}
+				}
+			}
+			f(w, ct, e.wt) // 1
+			for i := 1; i <= sizeW; i++ {
+				if j := i + i&-i; j <= sizeW {
+					sumA[j] += sumA[i]
+				}
+			}
+			sonInfo[ct][idx] = sumA
+		}
+		for i := 1; i <= compSize; i++ {
+			if j := i + i&-i; j <= compSize {
+				totA[j] += totA[i]
+			}
+		}
+		mergeSonInfo[ct] = totA
+
+		deleted[ct] = true
+		for _, e := range g[ct] {
+			w := e.to
+			if deleted[w] {
+				continue
+			}
+			if w != faCt {
+				dfs(w, ct, size[w])
+			} else {
+				dfs(w, ct, compSize-size[ct])
+			}
+		}
+	}
+	dfs(root, -1, len(g))
+
+	update := func(x, val int) {
+		delta := val - a[x]
+		a[x] = val
+		for _, p := range paCts[x] {
+			sonInfo[p.ct][p.sonI].update(p.ctDis, delta)
+			mergeSonInfo[p.ct].update(p.ctDis, delta)
+		}
+	}
+
+	// https://www.luogu.com.cn/problem/P6329
+	query := func(cur, k int) int {
+		// 单独统计 cur
+		res := a[cur]
+		// 统计 cur 作为重心时，到它所在重心连通块的其余点的信息
+		res += mergeSonInfo[cur].pre(min(k, len(mergeSonInfo[cur])-1))
+		for _, p := range paCts[cur] {
+			if p.ctDis > k {
+				continue
+			}
+			// 单独统计 cur 与 p.ct 的信息
+			res += a[p.ct]
+			// 统计 p.ct 到重心连通块内的其余点的信息（个数），注意不能包含 cur 所在子树（否则就重复统计了）
+			res += mergeSonInfo[p.ct].pre(min(k-p.ctDis, len(mergeSonInfo[p.ct])-1)) -
+				sonInfo[p.ct][p.sonI].pre(min(k-p.ctDis, len(sonInfo[p.ct][p.sonI])-1))
+		}
+		return res
+	}
+
+	_ = []any{update, query}
+}
+
+// 边分治
+// todo https://oi-wiki.org/graph/tree-divide/#%E8%BE%B9%E5%88%86%E6%B2%BB
+
+// 最近公共祖先 · 其一 · 基于树上倍增
+// 【模板讲解】树上倍增算法（以及最近公共祖先） 
+// - 请看 https://leetcode.cn/problems/kth-ancestor-of-a-tree-node/solution/mo-ban-jiang-jie-shu-shang-bei-zeng-suan-v3rw/
+// O(nlogn) 预处理，O(logn) 查询
+// 适用于查询量和节点数等同的情形
+// 适用于可以动态添加节点（挂叶子）的情形
+// NOTE: 多个点的 LCA 等于 dfn_min 和 dfn_max 的 LCA
+// https://oi-wiki.org/graph/lca/#_5
+// 另见 mo.go 中的【树上莫队】
+//
+// 倍增 LC1483 https://leetcode.cn/problems/kth-ancestor-of-a-tree-node/
+// 模板题 https://www.luogu.com.cn/problem/P3379
+// https://codeforces.com/problemset/problem/33/D 2000
+// https://codeforces.com/problemset/problem/1304/E 2000
+// https://codeforces.com/problemset/problem/1702/G2 2000 分类讨论
+// - https://codeforces.com/problemset/problem/1527/D 2400 分类讨论（思路同 CF1702G2，但不需要倍增）
+// https://atcoder.jp/contests/arc060/tasks/arc060_c 2154 倍增思想
+// https://codeforces.com/problemset/problem/519/E 2100 到两点距离相同的点的数量
+// https://codeforces.com/problemset/problem/1535/E 2200
+// https://codeforces.com/problemset/problem/379/F 2400
+// https://codeforces.com/problemset/problem/916/E 2400
+// https://ac.nowcoder.com/acm/contest/6913/C 路径点权乘积 
+//
+// 维护元素和 LC2836 https://leetcode.cn/problems/maximize-value-of-function-in-a-ball-passing-game/
+// 维护边权出现次数 LC2846 https://leetcode.cn/problems/minimum-edge-weight-equilibrium-queries-in-a-tree/
+// 维护最大值（与 MST 结合）https://codeforces.com/problemset/problem/609/E 2100
+//    变体 https://codeforces.com/problemset/problem/733/F 2200
+// 维护最大值（与 MST 结合）LC1697 https://leetcode.cn/problems/checking-existence-of-edge-length-limited-paths/
+// 维护最大值（与 MST 结合）LC1724（上面这题的在线版）https://leetcode.cn/problems/checking-existence-of-edge-length-limited-paths-ii/
+// 维护最大值和严格次大值（严格次小 MST）：见 graph.go 中的 strictlySecondMST
+// 维护前十大（点权）https://codeforces.com/problemset/problem/587/C 2200
+// 维护最大子段和 https://codeforces.com/contest/1843/problem/F2
+// 维护从 x 往上有几个不同的 OR https://codeforces.com/contest/1878/problem/G
+// 维护最大值 https://www.hackerearth.com/practice/algorithms/graphs/graph-representation/practice-problems/algorithm/optimal-connectivity-c6ae79ca/
+// http://acm.hdu.edu.cn/showproblem.php?pid=7345
+//
+// 树上倍增-查询深度最小的未被标记的点 https://codeforces.com/problemset/problem/980/E 2200
+// 题目推荐 https://cp-algorithms.com/graph/lca.html#toc-tgt-2
+// todo poj2763 poj1986 poj3728
+func (*tree) lcaBinaryLifting(root int, g [][]int) {
+	const mx = 17 // bits.Len(最大节点数)
+	pa := make([][mx]int, len(g))
+	dep := make([]int, len(g)) // 根节点的深度为 0
+	var buildPa func(int, int)
+	buildPa = func(v, p int) {
+		pa[v][0] = p
+		for _, w := range g[v] {
+			if w != p {
+				dep[w] = dep[v] + 1
+				buildPa(w, v)
+			}
+		}
+	}
+	buildPa(root, -1) // pa[root][0] = -1
 	for i := 0; i+1 < mx; i++ {
 		for v := range pa {
 			if p := pa[v][i]; p != -1 {
@@ -694,29 +1116,19 @@ func (*tree) lcaBinarySearch(n, root int, g [][]int, max func(int, int) int) {
 			}
 		}
 	}
-	// 从 v 开始向上跳 k 步，不存在返回 -1
-	// O(1) 求法见长链剖分
-	uptoKthPa := func(v, k int) int {
-		for i := 0; i < mx && v != -1; i++ {
-			if k>>i&1 > 0 {
-				v = pa[v][i]
-			}
-		}
-		return v
-	}
-	// 从 v 开始向上跳到指定深度 d，d<=dep[v]
+	// 从 v 开始，向上跳到指定深度 d
 	// https://en.wikipedia.org/wiki/Level_ancestor_problem
-	// https://codeforces.com/problemset/problem/1535/E
+	// https://codeforces.com/problemset/problem/1535/E 2200
 	uptoDep := func(v, d int) int {
-		for i := 0; i < mx; i++ {
-			if (dep[v]-d)>>i&1 > 0 {
-				v = pa[v][i]
-				//if v == -1 { panic(-9) }
-			}
+		if d > dep[v] {
+			panic(-1)
+		}
+		for k := uint(dep[v] - d); k > 0; k &= k - 1 {
+			v = pa[v][bits.TrailingZeros(k)]
 		}
 		return v
 	}
-	_lca := func(v, w int) int {
+	getLCA := func(v, w int) int {
 		if dep[v] > dep[w] {
 			v, w = w, v
 		}
@@ -731,24 +1143,80 @@ func (*tree) lcaBinarySearch(n, root int, g [][]int, max func(int, int) int) {
 		}
 		return pa[v][0]
 	}
-	disVW := func(v, w int) int { return dep[v] + dep[w] - dep[_lca(v, w)]<<1 }
+	getDis := func(v, w int) int { return dep[v] + dep[w] - dep[getLCA(v, w)]*2 }
 
-	// EXTRA: 输入 u 和 v，u 是 v 的祖先，返回 u 到 v 路径上的第二个节点
-	down := func(u, v int) int {
-		// assert dep[u] < dep[v]
-		v = uptoDep(v, dep[u]+1)
-		if pa[v][0] == u {
-			return v
+	// EXTRA: 输入 v 和 to，to 可能是 v 的子孙，返回从 v 到 to 路径上的第二个节点（v 的一个儿子）
+	// 如果 to 不是 v 的子孙，返回 -1
+	// https://codeforces.com/problemset/problem/1702/G2 2000
+	// https://codeforces.com/problemset/problem/916/E 2400
+	down1 := func(v, to int) int {
+		if dep[to] <= dep[v] {
+			return -1
+		}
+		to = uptoDep(to, dep[v]+1)
+		if pa[to][0] == v {
+			return to
 		}
 		return -1
 	}
 
+	// EXTRA: 从 v 出发，向 to 方向走一步
+	// 输入需要保证 v != to
+	move1 := func(v, to int) int {
+		if v == to {
+			panic(-1)
+		}
+		if getLCA(v, to) == v { // to 在 v 下面
+			return uptoDep(to, dep[v]+1)
+		}
+		// lca 在 v 上面
+		return pa[v][0]
+	}
+
+	// EXTRA: 从 v 开始，向上跳 k 步
+	// 不存在则返回 -1
+	// O(1) 求法见长链剖分
+	uptoKthPa := func(v, k int) int {
+		for ; k > 0 && v != -1; k &= k - 1 {
+			v = pa[v][bits.TrailingZeros(uint(k))]
+		}
+		return v
+	}
+
+	// EXTRA: 输入 v 和 w，返回 v 到 w 路径上的中点
+	// 返回值是一个数组，因为可能有两个中点
+	// 在有两个中点的情况下，保证返回值的第一个中点离 v 更近
+	midPath := func(v, w int) []int {
+		lca := getLCA(v, w)
+		dv := dep[v] - dep[lca]
+		dw := dep[w] - dep[lca]
+		if dv == dw {
+			return []int{lca}
+		}
+		if dv > dw {
+			mid := uptoKthPa(v, (dv+dw)/2)
+			if (dv+dw)%2 == 0 {
+				return []int{mid}
+			}
+			return []int{mid, pa[mid][0]}
+		} else {
+			mid := uptoKthPa(w, (dv+dw)/2)
+			if (dv+dw)%2 == 0 {
+				return []int{mid}
+			}
+			return []int{pa[mid][0], mid} // pa[mid][0] 离 v 更近
+		}
+	}
+
 	{
 		// 加权树上二分
-		var dep []int64 // 加权深度，dfs 预处理略
+		var dep []int // 加权深度，dfs 预处理略
 		// 从 v 开始向根移动至多 d 距离，返回最大移动次数，以及能移动到的离根最近的点
+		// NOIP2012·提高 疫情控制 https://www.luogu.com.cn/problem/P1084
 		// 变形 https://codeforces.com/problemset/problem/932/D
-		uptoDep := func(v int, d int64) (int, int) {
+		// 点权写法 https://codeforces.com/problemset/problem/1059/E 2400
+		// https://www.luogu.com.cn/problem/P7167
+		uptoDep := func(v, d int) (int, int) {
 			step := 0
 			dv := dep[v]
 			for i := mx - 1; i >= 0; i-- {
@@ -764,33 +1232,42 @@ func (*tree) lcaBinarySearch(n, root int, g [][]int, max func(int, int) int) {
 
 	{
 		// EXTRA: 倍增的时候维护其他属性，如边权最值等
-		// 下面的代码来自 https://codeforces.com/problemset/problem/609/E
+		// 下面的代码来自 https://codeforces.com/problemset/problem/609/E 2100
 		// EXTRA: 额外维护最值边的下标，见 https://codeforces.com/contest/733/submission/120955685
+		// 点权写法 https://codeforces.com/problemset/problem/1059/E 2400
 		type nb struct{ to, wt int }
-		g := make([][]nb, n)
-		// read g ...
+		var g [][]nb // read g ...
+
 		const mx = 18
-		type pair struct{ p, maxWt int }
-		pa := make([][mx]pair, n)
-		dep := make([]int, n)
+		type data int
+		type pair struct {
+			p     int
+			maxWt data
+		}
+		pa := make([][mx]pair, len(g))
+		dep := make([]int, len(g))
 		var build func(v, p, d int)
 		build = func(v, p, d int) {
 			pa[v][0].p = p
 			dep[v] = d
 			for _, e := range g[v] {
 				if w := e.to; w != p {
-					pa[w][0].maxWt = e.wt
+					pa[w][0].maxWt = data(e.wt)
 					build(w, v, d+1)
 				}
 			}
 		}
 		build(0, -1, 0)
 
+		merge := func(a, b data) data {
+			return data(max(int(a), int(b)))
+		}
+
 		for i := 0; i+1 < mx; i++ {
 			for v := range pa {
 				if p := pa[v][i]; p.p != -1 {
 					pp := pa[p.p][i]
-					pa[v][i+1] = pair{pp.p, max(p.maxWt, pp.maxWt)}
+					pa[v][i+1] = pair{pp.p, merge(p.maxWt, pp.maxWt)}
 				} else {
 					pa[v][i+1].p = -1
 				}
@@ -798,36 +1275,36 @@ func (*tree) lcaBinarySearch(n, root int, g [][]int, max func(int, int) int) {
 		}
 
 		// 求 LCA(v,w) 的同时，顺带求出 v-w 上的边权最值
-		_lca := func(v, w int) (lca, maxWt int) {
+		getLCA := func(v, w int) (lca int, maxWt data) {
+			//pathLen := dep[v] + dep[w]
 			if dep[v] > dep[w] {
 				v, w = w, v
 			}
-			for i := 0; i < mx; i++ {
-				if (dep[w]-dep[v])>>i&1 > 0 {
-					p := pa[w][i]
-					maxWt = max(maxWt, p.maxWt)
-					w = p.p
-				}
+			for k := dep[w] - dep[v]; k > 0; k &= k - 1 {
+				p := pa[w][bits.TrailingZeros(uint(k))]
+				maxWt = merge(maxWt, p.maxWt)
+				w = p.p
 			}
 			if w != v {
 				for i := mx - 1; i >= 0; i-- {
 					if pv, pw := pa[v][i], pa[w][i]; pv.p != pw.p {
-						maxWt = max(maxWt, max(pv.maxWt, pw.maxWt))
+						maxWt = merge(maxWt, merge(pv.maxWt, pw.maxWt))
 						v, w = pv.p, pw.p
 					}
 				}
-				maxWt = max(maxWt, max(pa[v][0].maxWt, pa[w][0].maxWt))
+				maxWt = merge(maxWt, merge(pa[v][0].maxWt, pa[w][0].maxWt))
 				v = pa[v][0].p
 			}
-			// 如果是点权的话这里加上 maxWt = max(maxWt, pa[v][0].maxWt)
+			// 如果是点权的话这里加上 maxWt = merge(maxWt, pa[v][0].maxWt)
 			lca = v
+			//pathLen -= dep[lca] * 2
 			return
 		}
 
-		_ = _lca
+		_ = getLCA
 	}
 
-	_ = []interface{}{disVW, uptoKthPa, down}
+	_ = []interface{}{getDis, uptoKthPa, down1, move1, midPath}
 }
 
 // 最近公共祖先 · 其二 · 基于 RMQ
@@ -835,12 +1312,15 @@ func (*tree) lcaBinarySearch(n, root int, g [][]int, max func(int, int) int) {
 // 由于预处理 ST 表是基于一个长度为 2n 的序列，所以常数上是比倍增算法要大的。内存占用也比倍增要大一倍左右（这点可忽略）
 // 优点是查询的复杂度低，适用于查询量大的情形
 // https://oi-wiki.org/graph/lca/#rmq
-func (*tree) lcaRMQ(n, root int, g [][]int) {
-	vs := make([]int, 0, 2*n-1)  // 欧拉序列
-	pos := make([]int, n)        // pos[v] 表示 v 在 vs 中第一次出现的位置编号
-	dep := make([]int, 0, 2*n-1) // 深度序列，和欧拉序列一一对应
-	disRoot := make([]int, n)    // disRoot[v] 表示 v 到 root 的距离
-	var build func(v, p, d int)  // 若有边权需额外传参 dis
+// todo DFS 序求 LCA（常数更小） https://www.cnblogs.com/alex-wei/p/DFN_LCA.html
+// https://codeforces.com/problemset/problem/342/E
+// 注：如果只有路径修改+查询，可以用欧拉序列 + 树状数组/线段树，见《挑战》p.332 http://poj.org/problem?id=2763
+func (*tree) lcaRMQ(root int, g [][]int) {
+	vs := make([]int, 0, 2*len(g)-1)  // 欧拉序列
+	pos := make([]int, len(g))        // pos[v] 表示 v 在 vs 中第一次出现的位置编号
+	dep := make([]int, 0, 2*len(g)-1) // 深度序列，和欧拉序列一一对应
+	disRoot := make([]int, len(g))    // disRoot[v] 表示 v 到 root 的距离
+	var build func(v, p, d int)       // 若有边权需额外传参 dis
 	build = func(v, p, d int) {
 		pos[v] = len(vs)
 		vs = append(vs, v)
@@ -855,14 +1335,15 @@ func (*tree) lcaRMQ(n, root int, g [][]int) {
 		}
 	}
 	build(root, -1, 0)
-	type pair struct{ v, i int }
-	const mx = 17 // bits.Len(最大节点数)
-	var st [][mx]pair
+
+	type stPair struct{ v, i int }
+	const mx = 17 + 1 // bits.Len(len(dep))
+	var st [][mx]stPair
 	stInit := func(a []int) {
 		n := len(a)
-		st = make([][mx]pair, n)
+		st = make([][mx]stPair, n)
 		for i, v := range a {
-			st[i][0] = pair{v, i}
+			st[i][0] = stPair{v, i}
 		}
 		for j := 1; 1<<j <= n; j++ {
 			for i := 0; i+1<<j <= n; i++ {
@@ -884,117 +1365,139 @@ func (*tree) lcaRMQ(n, root int, g [][]int) {
 		return b.i
 	}
 	// 注意下标的换算，打印 LCA 的话要 +1
-	_lca := func(v, w int) int {
+	getLCA := func(v, w int) int {
 		pv, pw := pos[v], pos[w]
 		if pv > pw {
 			pv, pw = pw, pv
 		}
 		return vs[stQuery(pv, pw+1)]
 	}
-	_d := func(v, w int) int { return disRoot[v] + disRoot[w] - disRoot[_lca(v, w)]<<1 }
+	getDis := func(v, w int) int { return disRoot[v] + disRoot[w] - disRoot[getLCA(v, w)]*2 }
 
-	_ = _d
+	_ = getDis
 }
 
 // 最近公共祖先 · 其三 · Tarjan 离线算法
-// 时间和空间复杂度均为 O(n+q)
-// 虽然用了并查集但是由于数据的特殊性，操作的均摊结果是 O(1) 的，见 https://core.ac.uk/download/pdf/82125836.pdf
+// 时间复杂度 O(n+qα)
+// 原论文 https://dl.acm.org/doi/pdf/10.1145/800061.808753
+// https://core.ac.uk/download/pdf/82125836.pdf
 // https://oi-wiki.org/graph/lca/#tarjan
 // https://cp-algorithms.com/graph/lca_tarjan.html
-// 扩展：Tarjan RMQ https://codeforces.com/blog/entry/48994
-func (*tree) lcaTarjan(in io.Reader, n, q, root int) []int {
+// todo 线性做法 https://ljt12138.blog.uoj.ac/blog/4874
+// 类似思路可以用在求 RMQ 上 https://codeforces.com/blog/entry/48994
+//
+// LC2646 https://leetcode.cn/problems/minimize-the-total-price-of-the-trips/
+func (*tree) lcaTarjan(root int, edges, queries [][]int) []int {
+	n := len(edges) - 1
 	g := make([][]int, n)
-	for i := 1; i < n; i++ {
-		v, w := 0, 0
-		Fscan(in, &v, &w)
-		v--
-		w--
+	for _, e := range edges {
+		v, w := e[0], e[1]
 		g[v] = append(g[v], w)
 		g[w] = append(g[w], v)
 	}
 
-	lca := make([]int, q)
-	dis := make([]int, q) // dis(q.v,q.w)
+	nq := len(queries)
+	lca := make([]int, nq)
+	dis := make([]int, nq) // dis(q.v,q.w)
 	type query struct{ w, i int }
-	qs := make([][]query, n)
-	for i := 0; i < q; i++ {
-		v, w := 0, 0
-		Fscan(in, &v, &w)
-		v--
-		w--
+	qs := make([][]query, len(g))
+	for i, q := range queries {
+		v, w := q[0], q[1]
+		// 第一种写法：保证在 v=w 时恰好只更新一个（结合下面的 if w := q.w; w == v || ... 理解）
+		qs[v] = append(qs[v], query{w, i})
 		if v != w {
-			qs[v] = append(qs[v], query{w, i})
 			qs[w] = append(qs[w], query{v, i})
-		} else {
-			// do v==w...
-			lca[i] = v
-			dis[i] = 0
 		}
+
+		// 第二种写法：单独处理 v==w 的情况
+		//if v != w {
+		//	qs[v] = append(qs[v], query{w, i})
+		//	qs[w] = append(qs[w], query{v, i})
+		//} else {
+		//	// do v==w...
+		//	lca[i] = v
+		//	dis[i] = 0
+		//}
 	}
 
-	pa := make([]int, n)
-	for i := range pa {
-		pa[i] = i
+	_fa := make([]int, len(g))
+	for i := range _fa {
+		_fa[i] = i
 	}
 	var find func(int) int
 	find = func(x int) int {
-		if pa[x] != x {
-			pa[x] = find(pa[x])
+		if _fa[x] != x {
+			_fa[x] = find(_fa[x])
 		}
-		return pa[x]
+		return _fa[x]
 	}
 
-	dep := make([]int, n)
-	color := make([]int8, n)
-	var _f func(v, d int)
-	_f = func(v, d int) {
+	dep := make([]int, len(g))
+	// 为什么不用 bool 数组？
+	// 对于下面代码中的 do(v, w, lcaVW)
+	// 如果 v 是 w 的祖先节点，那么 w 递归结束后会触发一次，v 递归结束后又会触发一次
+	// 如果 do 中有增量更新，这样就错了
+	// 而三色标记法可以保证只会触发一次
+	color := make([]int8, len(g))
+	var tarjan func(int, int)
+	tarjan = func(v, d int) {
 		dep[v] = d
 		color[v] = 1
 		for _, w := range g[v] {
 			if color[w] == 0 {
-				_f(w, d+1)
-				pa[w] = v
+				tarjan(w, d+1)
+				_fa[w] = v // 相当于把 w 的子树节点全部 merge 到 v
 			}
 		}
 		for _, q := range qs[v] {
-			if w := q.w; color[w] == 2 {
-				// do(v, w, lcaVW)...
+			w := q.w
+			// color[w] == 2 意味着 y 所在子树已经遍历完
+			// 也就意味着 w 已经 merge 到它和 v 的 LCA 上了
+			if w == v || color[w] == 2 {
 				lcaVW := find(w)
 				lca[q.i] = lcaVW
-				dis[q.i] = dep[v] + dep[w] - dep[lcaVW]<<1
+				dis[q.i] = dep[v] + dep[w] - dep[lcaVW]*2
+				// do(v, w, lcaVW)...
 			}
 		}
 		color[v] = 2
 	}
-	_f(root, 0)
+	tarjan(root, 0)
 	return lca
 }
 
 // LCA 应用：树上差分
+// 入门（单点更新）LC2445 https://leetcode.cn/problems/number-of-nodes-with-value-one/
 // 操作为更新 v-w 路径上的点权或边权（初始为 0）
-// 点权时 diff[lca] -= val
+// 点权时 diff[lca] -= val 且 diff[father[lca]] -= val
+//    把 x-lca-y 看成 x-lca'-lca-y，这里 lca' 是 lca 的儿子，
+//    那么 x-lca' 就对应着 diff[x] += val 且 diff[lca] -= val
+//    lca-y 就对应着 diff[y] += val 且 diff[father[lca]] -= val
 // 边权时 diff[lca] -= 2 * val（定义 diff 为点到父亲的差分值）
 // https://www.luogu.com.cn/blog/RPdreamer/ci-fen-and-shu-shang-ci-fen
+// https://zhuanlan.zhihu.com/p/61299306
 // todo https://loj.ac/d/1698
+// 模板题（点权）https://www.luogu.com.cn/problem/P3128 LC2646 https://leetcode.cn/problems/minimize-the-total-price-of-the-trips/
 // 模板题（边权）https://codeforces.com/problemset/problem/191/C
-func (*tree) differenceInTree(in io.Reader, n, root int, g [][]int) []int {
-	_lca := func(v, w int) (_ int) { return }
+// todo https://www.luogu.com.cn/problem/P2680
+// https://codeforces.com/problemset/problem/1707/C
+func (*tree) differenceInTree(n, root int, g, queries [][]int) []int {
+	var pa [][]int
+	var getLCA func(int, int) int
 
 	diff := make([]int, n)
 	update := func(v, w int, val int) {
-		lca := _lca(v, w)
 		diff[v] += val
 		diff[w] += val
+		lca := getLCA(v, w)
 		diff[lca] -= val // 点权
+		if f := pa[lca][0]; f >= 0 {
+			diff[f] -= val // 点权
+		}
 		//diff[lca] -= 2 * val // 边权
 	}
-	var q int
-	Fscan(in, &q)
-	for i := 0; i < q; i++ {
-		var v, w, val int
-		Fscan(in, &v, &w, &val)
-		v--
-		w--
+	for _, q := range queries {
+		v, w, val := q[0], q[1], q[2]
 		update(v, w, val)
 	}
 
@@ -1021,6 +1524,131 @@ func (*tree) differenceInTree(in io.Reader, n, root int, g [][]int) []int {
 	return ans
 }
 
+// LCA+DFN：虚树 Virtual Tree / Auxiliary Tree
+// https://oi-wiki.org/graph/virtual-tree/ 栈相比两次排序，效率更高
+// 【点评】除了 DFS 遍历虚树，也可以把虚树上的所有点整合到数组 vtNodes 中，并计算出每个点的父节点 vtPa
+//        然后按照 DFN 从小到大排序 vtNodes，倒着遍历 vtNodes 数组，就可以直接自底向上算了
+//        但这样做还要再排序，并使用几个额外的数组，所以相比之下直接 DFS 更好
+//
+// 题单 https://www.luogu.com.cn/training/3682#problems
+// 入门 https://codeforces.com/problemset/problem/613/D 2800
+// 换根 DP https://codeforces.com/problemset/problem/1320/E 3000
+// https://www.luogu.com.cn/problem/P4103 [HE14] 大工程（点对距离和，最短路径，最长路径/直径）
+// - https://atcoder.jp/contests/abc359/tasks/abc359_g 点对距离和
+// https://www.luogu.com.cn/problem/P3233 [HN14] 世界树
+// https://www.luogu.com.cn/problem/P2495 [SD11] 消耗战
+// https://www.luogu.com.cn/problem/P5891
+// https://www.luogu.com.cn/problem/P7409
+func (*tree) virtualTree(g [][]int) {
+	var dep []int
+	var getLCA func(int, int) int
+
+	dfn := make([]int, len(g))
+	ts := 0
+	_ = ts
+	// 向上查找<lcaBinaryLifting>
+	// 在 buildPa 开头添加：
+	// dfn[v] = ts; ts++
+
+	vt := make([][]int, len(g))
+	// vt := make([][]edge, len(g))
+	inNodes := make([]int, len(g))
+	for i := range inNodes {
+		inNodes[i] = -1
+	}
+	addVtEdge := func(v, w int) {
+		vt[v] = append(vt[v], w)
+		// wt := dep[w] - dep[v]
+		// vt[v] = append(vt[v], edge{w, wt})
+		// 也可以在 DFS 的时候算出边权
+	}
+	const root = 0
+	st := []int{root} // 用根节点作为栈底哨兵
+	// nodes 为询问的「关键节点」
+	do := func(nodes []int, qid int) {
+		slices.SortFunc(nodes, func(a, b int) int { return dfn[a] - dfn[b] })
+		vt[root] = vt[root][:0]
+		st = st[:1]
+		for _, v := range nodes {
+			inNodes[v] = qid // 时间戳
+			if v == root {
+				continue
+			}
+			// ... 某些题目需要判断 v 和 pa[v][0] 是否都在 nodes 中
+			vt[v] = vt[v][:0]
+			lca := getLCA(st[len(st)-1], v)
+			// 回溯
+			for len(st) > 1 && dfn[lca] <= dfn[st[len(st)-2]] {
+				addVtEdge(st[len(st)-2], st[len(st)-1])
+				st = st[:len(st)-1]
+			}
+			if lca != st[len(st)-1] { // lca 不在栈中（首次遇到）
+				vt[lca] = vt[lca][:0]
+				addVtEdge(lca, st[len(st)-1])
+				st[len(st)-1] = lca // 加到栈中
+				// ... 标记 lca 是虚点
+			}
+			st = append(st, v)
+		}
+		// 最后的回溯
+		for i := 1; i < len(st); i++ {
+			addVtEdge(st[i-1], st[i])
+		}
+
+		// 计算 nodes 两两间的：
+		// 路径长度和
+		// 最短路径
+		// 最长路径（直径）
+		const inf int = 1e18
+		sumWt, gMinL, gMaxL := 0, inf, 0
+		var f func(int) (int, int, int)
+		f = func(v int) (size, minL, maxL int) {
+			// 如果 inNodes[v] != qid，那么 v 只是关键节点之间路径上的「拐点」
+			// 在处理虚树 DP 时，可能需要额外考虑 v 不在 nodes 中的情况
+			imp := inNodes[v] == qid
+			if imp {
+				size = 1
+			}
+			minL = inf
+			for _, w := range vt[v] {
+				sz, mn, mx := f(w)
+				wt := dep[w] - dep[v]
+				sumWt += wt * sz * (len(nodes) - sz) // 贡献法
+				size += sz
+
+				mn += wt
+				if imp {
+					gMinL = min(gMinL, mn)
+				} else {
+					gMinL = min(gMinL, minL+mn)
+					minL = min(minL, mn)
+				}
+
+				mx += wt
+				gMaxL = max(gMaxL, maxL+mx)
+				maxL = max(maxL, mx)
+			}
+			if minL == inf {
+				minL = 0
+			}
+			return
+		}
+		rt := root
+		if inNodes[rt] != qid && len(vt[rt]) == 1 {
+			// 注意 root 只是一个哨兵，得从真正的根节点开始
+			rt = vt[rt][0]
+		}
+		f(rt)
+
+		// 收尾工作：reset 数组
+		//for _, v := range nodes {
+		//	idx[v] = 0
+		//}
+	}
+
+	_ = do
+}
+
 // 树链剖分/重链剖分 (HLD, Heavy Light Decomposition）
 // 性质：
 //    树上每个结点都属于且仅属于一条重链
@@ -1039,25 +1667,33 @@ func (*tree) differenceInTree(in io.Reader, n, root int, g [][]int) []int {
 // https://codeforces.com/blog/entry/81317
 // 树链剖分详解 https://www.cnblogs.com/zwfymqz/p/8094500.html
 // 树链剖分详解 https://www.luogu.com.cn/blog/communist/shu-lian-pou-fen-yang-xie
+// O(log n) 查询 https://codeforces.com/blog/entry/127896
 //
-// 注：若没有修改操作，见 lcaBinarySearch（路径查询）以及 subtreeSize（子树查询）
+// 注：若没有修改操作，更简单的做法见 lcaBinaryLifting（路径查询）以及 dfnOrder（子树查询）
+// 注：如果只有路径修改+查询，可以用欧拉序列 + 树状数组/线段树，见《挑战》p.332
 //
 // 模板题（点权）https://www.luogu.com.cn/problem/P3384
+//            https://codeforces.com/problemset/problem/343/D 2100
+// 模板题（边权）https://atcoder.jp/contests/abc294/tasks/abc294_g
+// - 也可以转换成子树所有点的 dis 都增加了 delta，用欧拉序+差分树状数组维护
 // 与最小生成树结合（边权）https://codeforces.com/problemset/problem/609/E
 // 好题 https://codeforces.com/contest/1174/problem/F
 // 归并树 https://codeforces.com/problemset/problem/587/C
-// todo 子异和 https://www.luogu.com.cn/problem/P5127
-// todo 完成题单 https://www.luogu.com.cn/training/1654
+// todo 题单 https://www.luogu.com.cn/training/1654
+// todo https://www.luogu.com.cn/problem/P5127
 // TODO: 处理边权的情况
+//   https://www.luogu.com.cn/problem/P1505
+//   https://www.luogu.com.cn/problem/P4315
+//   https://www.luogu.com.cn/problem/P4114
 // todo NOI21 轻重边 https://www.luogu.com.cn/problem/P7735
+//  https://www.luogu.com.cn/problem/P4211
 // 结合广义圆方树 https://codeforces.com/problemset/problem/487/E
-func (*tree) heavyLightDecomposition(n, root int, g [][]int, vals []int64) { // vals 为点权
+func (*tree) heavyLightDecomposition(n, root int, g [][]int, vals []int) { // vals 为点权
 	// 深度，子树大小，重儿子，父节点，所处重链顶点（深度最小），DFS 序（作为线段树中的编号，从 1 开始）
 	type node struct{ depth, size, hson, fa, top, dfn int }
 	nodes := make([]node, n)
 	//idv := make([]int, n+1) // idv[nodes[v].dfn] == v
-
-	var build func(v, fa, dep int) int
+	var build func(int, int, int) int
 	build = func(v, fa, dep int) int {
 		size, hsz, hson := 1, 0, -1
 		for _, w := range g[v] {
@@ -1074,28 +1710,14 @@ func (*tree) heavyLightDecomposition(n, root int, g [][]int, vals []int64) { // 
 	}
 	build(root, -1, 0)
 
-	{
-		// EXTRA: 寻找以 st 为重链顶点的重链
-		// hPath[-1] 即为重链末端节点
-		getHP := func(st int) []int {
-			hPath := []int{st}
-			for o := nodes[st]; o.hson != -1; o = nodes[o.hson] {
-				hPath = append(hPath, o.hson)
-			}
-			return hPath
-		}
-
-		_ = getHP
-	}
-
 	dfn := 0
-	var markTop func(v, top int)
+	var markTop func(int, int)
 	markTop = func(v, top int) {
 		o := &nodes[v]
 		o.top = top
-		dfn++
 		o.dfn = dfn
 		//idv[dfn] = v
+		dfn++
 		if o.hson != -1 {
 			// 优先遍历重儿子，保证在同一条重链上的点的 DFS 序是连续的
 			markTop(o.hson, top)
@@ -1109,9 +1731,9 @@ func (*tree) heavyLightDecomposition(n, root int, g [][]int, vals []int64) { // 
 	markTop(root, root)
 
 	// 按照 DFS 序对应的点权初始化线段树
-	dfnVals := make([]int64, n)
+	dfnVals := make([]int, n)
 	for i, v := range vals {
-		dfnVals[nodes[i].dfn-1] = v
+		dfnVals[nodes[i].dfn] = v
 	}
 	t := newLazySegmentTree(dfnVals)
 
@@ -1136,12 +1758,22 @@ func (*tree) heavyLightDecomposition(n, root int, g [][]int, vals []int64) { // 
 		do(ov.dfn, ow.dfn)
 		// TODO: 边权下，处理轻边的情况
 	}
-	updatePath := func(v, w int, add int64) { doPath(v, w, func(l, r int) { t.update(1, l, r, add) }) }
-	queryPath := func(v, w int) (sum int64) { doPath(v, w, func(l, r int) { sum += t.query(1, l, r) }); return } // % mod
-	updateSubtree := func(v int, add int64) { o := nodes[v]; t.update(1, o.dfn, o.dfn+o.size-1, add) }
-	querySubtree := func(v int) (sum int64) { o := nodes[v]; return t.query(1, o.dfn, o.dfn+o.size-1) }
+	updatePath := func(v, w, add int) { doPath(v, w, func(l, r int) { t.update(1, l, r, add) }) }
+	queryPath := func(v, w int) (sum int) { doPath(v, w, func(l, r int) { sum += t.query(1, l, r) }); return } // % mod
+	updateSubtree := func(v, add int) { o := nodes[v]; t.update(1, o.dfn, o.dfn+o.size-1, add) }
+	querySubtree := func(v int) (sum int) { o := nodes[v]; return t.query(1, o.dfn, o.dfn+o.size-1) }
 
-	_ = []interface{}{updatePath, queryPath, updateSubtree, querySubtree}
+	// EXTRA: 寻找以 st 为重链顶点的重链
+	// hPath[-1] 即为重链末端节点
+	getHP := func(st int) []int {
+		hPath := []int{st}
+		for o := nodes[st]; o.hson != -1; o = nodes[o.hson] {
+			hPath = append(hPath, o.hson)
+		}
+		return hPath
+	}
+
+	_ = []any{updatePath, queryPath, updateSubtree, querySubtree, getHP}
 }
 
 // 长链剖分
@@ -1297,6 +1929,7 @@ func (*tree) heavyLightDecompositionByDepth(n, root int, g [][]int) {
 }
 
 // 树上启发式合并 DSU on tree / small to large
+// 每个节点合并到另外一个集合中的次数不超过 O(nlogn)，因为一旦合并到另一个集合，这个节点所在的集合大小至少倍增
 // https://oi-wiki.org/graph/dsu-on-tree/
 // NOTE: 合并的时候最好先循环计算一遍答案，再循环合并一遍，这样的习惯可避免产生把合并之后的数值算入答案中的 bug
 // 讲解+套题 https://pzy.blog.luogu.org/dsu-on-tree-xue-xi-bi-ji
@@ -1305,21 +1938,50 @@ func (*tree) heavyLightDecompositionByDepth(n, root int, g [][]int) {
 // 模板题 https://www.luogu.com.cn/problem/U41492
 //       https://codeforces.com/problemset/problem/600/E https://www.acwing.com/problem/content/3191/
 // todo HNOI09 梦幻布丁 https://www.luogu.com.cn/problem/P3201 https://www.acwing.com/problem/content/2156/
-// 所有子树 mex LC2003 https://leetcode-cn.com/problems/smallest-missing-genetic-value-in-each-subtree/
+// LC2003 所有子树 mex https://leetcode.cn/problems/smallest-missing-genetic-value-in-each-subtree/
 // 距离等于 k 的点对数 https://codeforces.com/problemset/problem/161/D
 //            变形题 https://ac.nowcoder.com/acm/contest/4853/E 题解 https://ac.nowcoder.com/discuss/394080
-// todo https://ac.nowcoder.com/acm/contest/4010/E
-//  https://atcoder.jp/contests/abc183/tasks/abc183_f
-//  https://codeforces.com/contest/1455/problem/G
-//  https://codeforces.com/contest/570/problem/D
-//  https://codeforces.com/contest/246/problem/E
-//  https://codeforces.com/contest/208/problem/E
-//  https://codeforces.com/contest/1009/problem/F
-//  https://codeforces.com/contest/375/problem/D
-//  https://codeforces.com/contest/741/problem/D
-func (*tree) dsu(n, root int, g [][]int, vals []int) { // vals 为点权
-	hson := make([]int, n)
-	var build func(v, fa int) int
+// https://ac.nowcoder.com/acm/contest/4010/E
+// https://atcoder.jp/contests/abc183/tasks/abc183_f
+// https://codeforces.com/contest/1455/problem/G
+// https://codeforces.com/contest/570/problem/D
+// https://codeforces.com/contest/246/problem/E
+// https://codeforces.com/contest/208/problem/E
+// https://codeforces.com/contest/1009/problem/F
+// https://codeforces.com/contest/375/problem/D
+// https://codeforces.com/contest/741/problem/D
+// https://codeforces.com/problemset/problem/1805/E
+// https://codeforces.com/contest/1824/problem/C
+
+// 写法一：按 map 的大小合并
+// 路径点权异或 https://codeforces.com/problemset/problem/1709/E
+func (*tree) smallToLarge(root int, g [][]int, vals []int) { // vals 为点权
+	var f func(int, int, int) map[int]bool
+	f = func(v, fa, xor int) map[int]bool {
+		xor ^= vals[v]
+		m := map[int]bool{xor: true}
+		for _, w := range g[v] {
+			if w == fa {
+				continue
+			}
+			subM := f(w, v, xor)
+			if len(subM) > len(m) {
+				m, subM = subM, m
+			}
+			// check subM ...
+			maps.Copy(m, subM) // m <- subM
+		}
+		return m
+	}
+	f(root, -1, 0)
+}
+
+// 写法二：轻重儿子合并 · map 版本
+// 根节点到树上任意节点的轻边数不超过 O(logn) 条
+// 某些题目可以不用 map，而是像莫队那样添加和撤销，这样只用数组就行，例如 https://codeforces.com/problemset/problem/375/D
+func (*tree) dsuMap(root int, g [][]int, vals []int) { // vals 为点权
+	hson := make([]int, len(g))
+	var build func(int, int) int
 	build = func(v, fa int) int {
 		sz, hsz, hs := 1, 0, -1
 		for _, w := range g[v] {
@@ -1331,28 +1993,28 @@ func (*tree) dsu(n, root int, g [][]int, vals []int) { // vals 为点权
 				}
 			}
 		}
-		hson[v] = hs
+		hson[v] = hs // 叶子的重儿子是 -1
 		return sz
 	}
 	build(root, -1)
 
 	// 例如：统计子树的点权种类数
-	ans := make([]int, n) // int64
-	var f func(v, fa int) map[int]bool
+	ans := make([]int, len(g))
+	var f func(int, int) map[int]bool
 	f = func(v, fa int) map[int]bool {
-		if hson[v] < 0 {
+		if hson[v] < 0 { // 叶结点
 			ans[v] = 1
 			return map[int]bool{vals[v]: true}
 		}
-		has := f(hson[v], v)
+		has := f(hson[v], v) // 先算重儿子
 		merge := func(val int) {
 			// do...
 			has[val] = true
 		}
 		for _, w := range g[v] {
-			if w != fa && w != hson[v] {
-				mp := f(w, v)
-				for val := range mp {
+			if w != fa && w != hson[v] { // 其余儿子合并到重儿子的结果中
+				subM := f(w, v)
+				for val := range subM {
 					merge(val)
 				}
 			}
@@ -1360,6 +2022,79 @@ func (*tree) dsu(n, root int, g [][]int, vals []int) { // vals 为点权
 		merge(vals[v])
 		ans[v] = len(has)
 		return has
+	}
+	f(root, -1)
+}
+
+// 写法三：轻重儿子合并 · 数组版本
+// 根节点到树上任意节点的轻边数不超过 O(logn) 条
+// 不用 map，而是像莫队那样添加和撤销，这样只需要数组，常数更小
+// 例如 https://codeforces.com/problemset/problem/375/D
+func (*tree) dsuArr(root int, g [][]int, vals []int) { // vals 为点权
+	dfn := 0
+	nodes := make([]struct{ l, r, hson int }, len(g)) // [l,r)
+	nodeVals := make([]int, 0, len(g))
+	var build func(int, int) int
+	build = func(v, fa int) int {
+		nodes[v].l = dfn
+		dfn++
+		nodeVals = append(nodeVals, vals[v])
+		size, hsz, hson := 1, 0, -1
+		for _, w := range g[v] {
+			if w != fa {
+				sz := build(w, v)
+				size += sz
+				if sz > hsz {
+					hsz, hson = sz, w
+				}
+			}
+		}
+		nodes[v].r = nodes[v].l + size
+		nodes[v].hson = hson
+		return size
+	}
+	build(root, -1)
+
+	//（离线）统计子树中的出现次数 >= k 的点权个数（1 <= k <= n）
+	cnt := [1e5 + 1]int{}
+	cc := make([]int, len(nodeVals)+1)
+	var f func(int, int)
+	f = func(v, fa int) {
+		hson := nodes[v].hson
+		for _, w := range g[v] {
+			if w == fa || w == hson {
+				continue
+			}
+			f(w, v)
+			// 恢复现场，这样下一棵子树不会受到影响
+			for _, x := range nodeVals[nodes[w].l:nodes[w].r] {
+				cc[cnt[x]]--
+				cnt[x]--
+			}
+		}
+		if hson >= 0 {
+			f(hson, v)
+			// 此时重儿子的数据已经添加
+		}
+
+		// 添加根节点的数据
+		cnt[vals[v]]++
+		cc[cnt[vals[v]]]++
+
+		for _, w := range g[v] {
+			if w == fa || w == hson {
+				continue
+			}
+			// 添加非重儿子的数据
+			for _, x := range nodeVals[nodes[w].l:nodes[w].r] {
+				cnt[x]++
+				cc[cnt[x]]++
+			}
+		}
+
+		// 子树 v 的每个节点的数据都已添加，回答询问
+		// 此时 cc[k] 就是子树 v 中的出现次数 >= k 的点权个数
+		// ...
 	}
 	f(root, -1)
 }
@@ -1402,16 +2137,13 @@ func (*tree) limitSizeDecomposition(n, blockSize int, g [][]int) {
 	}
 }
 
-// TODO: 虚树 Virtual Tree / Auxiliary Tree
-// https://oi-wiki.org/graph/virtual-tree/
-// https://www.luogu.com.cn/problem/P5891 https://class.luogu.com.cn/classroom/lgr66
-
 // 普吕弗序列（Prufer 序列，Prüfer sequence）
 // https://en.wikipedia.org/wiki/Pr%C3%BCfer_sequence
 // https://oeis.org/A000272 Cayley's formula https://en.wikipedia.org/wiki/Cayley%27s_formula
 // https://www.luogu.com.cn/problem/P6086
 // todo 光之大陆 https://www.acwing.com/problem/content/2420/
-func (tree) treeToPrufer(n int, pa []int) []int { // 传入的 pa 是以 n 为根时的每个节点的父节点
+// todo https://codeforces.com/problemset/problem/156/D
+func (*tree) treeToPrufer(n int, pa []int) []int { // 传入的 pa 是以 n 为根时的每个节点的父节点
 	deg := make([]int, n+1)
 	for i := 1; i < n; i++ {
 		deg[pa[i]]++
@@ -1433,7 +2165,7 @@ func (tree) treeToPrufer(n int, pa []int) []int { // 传入的 pa 是以 n 为�
 	return prufer
 }
 
-func (tree) pruferToTree(n int, prufer []int) []int {
+func (*tree) pruferToTree(n int, prufer []int) []int {
 	deg := make([]int, n+1)
 	for _, p := range prufer {
 		deg[p]++
